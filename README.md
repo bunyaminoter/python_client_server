@@ -93,4 +93,4 @@ python_client_server/
 ## Aşağıda Wireshark örneği eklenmiştir.
 
 
-![img.png](img.png)
+![img.png](wireshark.png)
