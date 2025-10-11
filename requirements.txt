@@ -1,0 +1,3 @@
+# Python Client-Server Application with Encryption
+# No external dependencies required - uses only standard library modules
+
