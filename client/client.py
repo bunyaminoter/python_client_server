@@ -64,9 +64,10 @@ class ClientGUI:
         encryption_combo = ttk.Combobox(
             encryption_frame, 
             textvariable=self.encryption_var,
-            values=["none", "caesar", "vigenere", "substitution", "rail_fence", "affine"],
+            values=["none", "caesar", "vigenere", "substitution", "rail_fence", "affine", 
+                   "route", "columnar_transposition", "polybius", "pigpen", "hill"],
             state="readonly",
-            width=15
+            width=20
         )
         encryption_combo.grid(row=0, column=1, padx=(0, 10))
         encryption_combo.bind('<<ComboboxSelected>>', self.on_encryption_changed)
@@ -141,6 +142,43 @@ class ClientGUI:
             ttk.Label(self.params_frame, text="B (0-25):").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
             self.affine_b_var = tk.StringVar(value="8")
             ttk.Entry(self.params_frame, textvariable=self.affine_b_var, width=10).grid(row=1, column=1)
+            
+        elif method == "route":
+            ttk.Label(self.params_frame, text="Satır Sayısı:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            self.route_rows_var = tk.StringVar(value="3")
+            ttk.Entry(self.params_frame, textvariable=self.route_rows_var, width=10).grid(row=0, column=1)
+            ttk.Label(self.params_frame, text="Sütun Sayısı:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
+            self.route_cols_var = tk.StringVar(value="3")
+            ttk.Entry(self.params_frame, textvariable=self.route_cols_var, width=10).grid(row=1, column=1)
+            ttk.Label(self.params_frame, text="Rota:").grid(row=2, column=0, sticky=tk.W, padx=(0, 5))
+            self.route_type_var = tk.StringVar(value="spiral")
+            route_combo = ttk.Combobox(
+                self.params_frame, 
+                textvariable=self.route_type_var,
+                values=["spiral", "row", "column", "diagonal"],
+                state="readonly",
+                width=10
+            )
+            route_combo.grid(row=2, column=1)
+            
+        elif method == "columnar_transposition":
+            ttk.Label(self.params_frame, text="Anahtar:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            self.columnar_key_var = tk.StringVar(value="KEY")
+            ttk.Entry(self.params_frame, textvariable=self.columnar_key_var, width=15).grid(row=0, column=1)
+            
+        elif method == "polybius":
+            ttk.Label(self.params_frame, text="Alfabe (25 harf, I ve J aynı):").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            self.polybius_alphabet_var = tk.StringVar(value="ABCDEFGHIKLMNOPQRSTUVWXYZ")
+            ttk.Entry(self.params_frame, textvariable=self.polybius_alphabet_var, width=25).grid(row=0, column=1)
+            
+        elif method == "pigpen":
+            ttk.Label(self.params_frame, text="Pigpen şifreleme (otomatik başlatılır)").grid(row=0, column=0, sticky=tk.W)
+            
+        elif method == "hill":
+            ttk.Label(self.params_frame, text="Anahtar Matris (2x2 veya 3x3):").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            self.hill_matrix_var = tk.StringVar(value="3,3,2,5")
+            ttk.Entry(self.params_frame, textvariable=self.hill_matrix_var, width=20).grid(row=0, column=1)
+            ttk.Label(self.params_frame, text="Örnek: 3,3,2,5 (2x2) veya 1,2,3,4,5,6,7,8,9 (3x3)").grid(row=1, column=0, columnspan=2, sticky=tk.W)
     
     def generate_substitution_key(self):
         """Generate random substitution key"""
@@ -170,6 +208,32 @@ class ClientGUI:
                 a = int(self.affine_a_var.get())
                 b = int(self.affine_b_var.get())
                 self.encryption_manager.set_affine_keys(a, b)
+            elif method == "polybius":
+                alphabet = self.polybius_alphabet_var.get()
+                if len(alphabet) == 25 and len(set(alphabet.upper())) == 25:
+                    self.encryption_manager.set_polybius_alphabet(alphabet)
+                else:
+                    messagebox.showerror("Hata", "Polybius alfabesi 25 farklı harf içermelidir!")
+                    return
+            elif method == "pigpen":
+                self.encryption_manager.set_pigpen_cipher()
+            elif method == "hill":
+                matrix_str = self.hill_matrix_var.get()
+                try:
+                    matrix_values = [int(x.strip()) for x in matrix_str.split(',')]
+                    if len(matrix_values) == 4:  # 2x2 matrix
+                        key_matrix = [[matrix_values[0], matrix_values[1]], 
+                                    [matrix_values[2], matrix_values[3]]]
+                    elif len(matrix_values) == 9:  # 3x3 matrix
+                        key_matrix = [[matrix_values[0], matrix_values[1], matrix_values[2]],
+                                    [matrix_values[3], matrix_values[4], matrix_values[5]],
+                                    [matrix_values[6], matrix_values[7], matrix_values[8]]]
+                    else:
+                        raise ValueError("Matris 4 (2x2) veya 9 (3x3) eleman içermelidir")
+                    self.encryption_manager.set_hill_matrix(key_matrix)
+                except ValueError as e:
+                    messagebox.showerror("Hata", f"Geçersiz matris formatı: {e}")
+                    return
             
             self.current_encryption = method
             self.encryption_params = self.get_encryption_params()
@@ -188,6 +252,12 @@ class ClientGUI:
             params['key'] = self.key_var.get()
         elif method == "rail_fence":
             params['rails'] = int(self.rails_var.get())
+        elif method == "route":
+            params['rows'] = int(self.route_rows_var.get())
+            params['cols'] = int(self.route_cols_var.get())
+            params['route'] = self.route_type_var.get()
+        elif method == "columnar_transposition":
+            params['key'] = self.columnar_key_var.get()
         
         return params
     

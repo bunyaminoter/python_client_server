@@ -12,6 +12,11 @@ Bu Python uygulaması, Tkinter GUI kullanarak modern bir arayüz sunar ve çeşi
   - Substitution Şifreleme
   - Rail Fence Şifreleme
   - Affine Şifreleme
+  - Route Şifreleme
+  - Columnar Transposition Şifreleme
+  - Polybius Şifreleme
+  - Pigpen Şifreleme
+  - Hill Şifreleme
 
 ## Kurulum
 
@@ -58,6 +63,29 @@ python run_client.py
   - B: 0-25 arası
 - **Formül**: E(x) = (ax + b) mod 26
 
+### 6. Route Şifreleme
+- **Parametreler**: 
+  - Satır sayısı
+  - Sütun sayısı
+  - Rota türü (spiral, row, column, diagonal)
+- **Örnek**: 3x3 spiral ile "HELLO" → "HOEL L"
+
+### 7. Columnar Transposition Şifreleme
+- **Parametre**: Anahtar kelime
+- **Örnek**: Anahtar="KEY" ile "HELLO" → "HOEL L"
+
+### 8. Polybius Şifreleme
+- **Parametre**: 25 harflik alfabe (I ve J aynı pozisyon)
+- **Örnek**: "HELLO" → "23 15 31 31 34"
+
+### 9. Pigpen Şifreleme
+- **Parametre**: Otomatik (sembol tabanlı)
+- **Örnek**: Her harf özel sembol ile temsil edilir
+
+### 10. Hill Şifreleme
+- **Parametre**: Anahtar matris (2x2 veya 3x3)
+- **Örnek**: [[3,3],[2,5]] matrisi ile "HELLO" → "RIJVS"
+
 ## Proje Yapısı
 
 ```
@@ -78,10 +106,12 @@ python_client_server/
 ## Özellikler
 
 - **Gerçek Zamanlı İletişim**: İstemci ve sunucu arasında anlık mesajlaşma
-- **Çoklu Şifreleme**: Aynı anda farklı şifreleme yöntemleri kullanabilme
+- **10 Farklı Şifreleme Yöntemi**: Klasik ve modern şifreleme algoritmaları
 - **Kullanıcı Dostu Arayüz**: Kolay kullanım için modern GUI
 - **Hata Yönetimi**: Kapsamlı hata yakalama ve kullanıcı bildirimleri
 - **Threading**: Arayüz donmadan çoklu işlem desteği
+- **Parametrik Şifreleme**: Her şifreleme yöntemi için özelleştirilebilir parametreler
+- **Otomatik Şifre Çözme**: Sunucu tarafında otomatik şifre çözme desteği
 
 ## Notlar
 
@@ -89,6 +119,10 @@ python_client_server/
 - İstemci otomatik olarak sunucuya bağlanmaya çalışır
 - Şifreleme parametreleri değiştirildiğinde otomatik olarak güncellenir
 - Bağlantı durumu arayüzde görüntülenir
+- Tüm şifreleme yöntemleri hem şifreleme hem de şifre çözme destekler
+- Hill şifreleme için matris determinantı 26 ile aralarında asal olmalıdır
+- Polybius şifrelemede I ve J harfleri aynı pozisyonu paylaşır
+- Route şifreleme farklı rota türleri destekler (spiral, satır, sütun, diagonal)
 
 ## Aşağıda Wireshark örneği eklenmiştir.
 
