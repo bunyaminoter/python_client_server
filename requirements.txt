@@ -1,3 +1,1 @@
-# Python Client-Server Application with Encryption
-# No external dependencies required - uses only standard library modules
-
+# Tüm şifrelemeler standart kütüphaneleri kullanır. Herhangi bir kütüphane import eklemenize gerek yoktur.

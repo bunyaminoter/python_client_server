@@ -1,5 +1,5 @@
 """
-Client implementation with GUI for encrypted client-server communication
+CLİENT (İstemci - Müşteri) arayüzü
 """
 
 import tkinter as tk
@@ -65,7 +65,7 @@ class ClientGUI:
             encryption_frame, 
             textvariable=self.encryption_var,
             values=["none", "caesar", "vigenere", "substitution", "rail_fence", "affine", 
-                   "route", "columnar_transposition", "polybius", "pigpen", "hill"],
+                   "route", "columnar_transposition", "polybius", "pigpen", "hill", "aes", "des"],
             state="readonly",
             width=20
         )
@@ -179,6 +179,24 @@ class ClientGUI:
             self.hill_matrix_var = tk.StringVar(value="3,3,2,5")
             ttk.Entry(self.params_frame, textvariable=self.hill_matrix_var, width=20).grid(row=0, column=1)
             ttk.Label(self.params_frame, text="Örnek: 3,3,2,5 (2x2) veya 1,2,3,4,5,6,7,8,9 (3x3)").grid(row=1, column=0, columnspan=2, sticky=tk.W)
+        
+        elif method == "aes":
+            ttk.Label(self.params_frame, text="AES Anahtarı:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            self.aes_key_var = tk.StringVar(value="varsayilan_aes_anahtari")
+            ttk.Entry(self.params_frame, textvariable=self.aes_key_var, width=25).grid(row=0, column=1, sticky=tk.W)
+            ttk.Label(self.params_frame, text="Opsiyonel IV:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
+            self.aes_iv_var = tk.StringVar(value="")
+            ttk.Entry(self.params_frame, textvariable=self.aes_iv_var, width=25).grid(row=1, column=1, sticky=tk.W)
+            ttk.Label(self.params_frame, text="IV boş bırakılırsa otomatik üretilir (mesaja gömülür).").grid(row=2, column=0, columnspan=2, sticky=tk.W)
+
+        elif method == "des":
+            ttk.Label(self.params_frame, text="DES Anahtarı:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            self.des_key_var = tk.StringVar(value="varsayilan_des")
+            ttk.Entry(self.params_frame, textvariable=self.des_key_var, width=25).grid(row=0, column=1, sticky=tk.W)
+            ttk.Label(self.params_frame, text="Opsiyonel IV:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
+            self.des_iv_var = tk.StringVar(value="")
+            ttk.Entry(self.params_frame, textvariable=self.des_iv_var, width=25).grid(row=1, column=1, sticky=tk.W)
+            ttk.Label(self.params_frame, text="Anahtar minimum 8 karakterdir, IV boşsa otomatik üretilir.").grid(row=2, column=0, columnspan=2, sticky=tk.W)
     
     def generate_substitution_key(self):
         """Generate random substitution key"""
@@ -234,6 +252,11 @@ class ClientGUI:
                 except ValueError as e:
                     messagebox.showerror("Hata", f"Geçersiz matris formatı: {e}")
                     return
+            elif method in ("aes", "des"):
+                key_value = self.aes_key_var.get() if method == "aes" else self.des_key_var.get()
+                if not key_value:
+                    messagebox.showerror("Hata", "Anahtar alanı boş bırakılamaz!")
+                    return
             
             self.current_encryption = method
             self.encryption_params = self.get_encryption_params()
@@ -258,6 +281,14 @@ class ClientGUI:
             params['route'] = self.route_type_var.get()
         elif method == "columnar_transposition":
             params['key'] = self.columnar_key_var.get()
+        elif method == "aes":
+            params['key'] = self.aes_key_var.get()
+            if self.aes_iv_var.get():
+                params['iv'] = self.aes_iv_var.get()
+        elif method == "des":
+            params['key'] = self.des_key_var.get()
+            if self.des_iv_var.get():
+                params['iv'] = self.des_iv_var.get()
         
         return params
     
@@ -291,12 +322,30 @@ class ClientGUI:
                 try:
                     # Try to parse as JSON
                     message_data = json.loads(data.decode('utf-8'))
-                    message = message_data.get('message', '')
-                    self.display_message(f"Sunucu: {message}")
+                    encrypted_message = message_data.get('message', '')
+                    method = message_data.get('method', 'none')
+                    params = message_data.get('params', {})
+
+                    if method != 'none':
+                        # İlk önce gelen şifreli mesajı göster
+                        self.display_message(f"Sunucu (şifreli): {encrypted_message}")
+                        try:
+                            decrypted = self.encryption_manager.decrypt(
+                                encrypted_message,
+                                method,
+                                **params
+                            )
+                            # Ardından çözülmüş halini göster
+                            self.display_message(f"Sunucu (çözüldü): {decrypted}")
+                        except Exception as e:
+                            self.display_message(f"Sunucu (şifre çözme hatası): {e}")
+                    else:
+                        # Şifreleme yoksa doğrudan mesajı göster
+                        self.display_message(f"Sunucu: {encrypted_message}")
                 except json.JSONDecodeError:
                     # Handle plain text
                     message = data.decode('utf-8')
-                    self.display_message(f"Sunucu: {message}")
+                    self.display_message(f"Sunucu (düz): {message}")
                     
         except Exception as e:
             if self.connected:
@@ -317,18 +366,21 @@ class ClientGUI:
         try:
             # Update encryption settings
             self.update_encryption_settings()
-            
+
+            # İlk önce gönderilen (düz) mesajı göster
+            self.display_message(f"Sen (gönderilen): {message}")
+
             # Encrypt message if needed
             if self.current_encryption != "none":
                 encrypted_message = self.encryption_manager.encrypt(
-                    message, 
-                    self.current_encryption, 
+                    message,
+                    self.current_encryption,
                     **self.encryption_params
                 )
+                # Ardından şifrelenmiş halini göster
                 self.display_message(f"Sen (şifrelenmiş): {encrypted_message}")
             else:
                 encrypted_message = message
-                self.display_message(f"Sen: {message}")
             
             # Prepare message data
             message_data = {

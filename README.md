@@ -2,6 +2,8 @@
 
 Bu Python uygulaması, Tkinter GUI kullanarak modern bir arayüz sunar ve çeşitli şifreleme yöntemleri içerir.
 
+- **Proje çıktı detayları için rapor.txt dosyasına bakınız.**
+
 ## Özellikler
 
 - **GUI İstemci**: Tkinter ile modern arayüz
@@ -17,11 +19,13 @@ Bu Python uygulaması, Tkinter GUI kullanarak modern bir arayüz sunar ve çeşi
   - Polybius Şifreleme
   - Pigpen Şifreleme
   - Hill Şifreleme
+  - AES (CBC, 256-bit anahtar türetme)
+  - DES (CBC, 64-bit anahtar türetme)
 
 ## Kurulum
 
-1. Python 3.7+ gereklidir
-2. Herhangi bir ek paket kurulumu gerekmez (sadece standart kütüphane kullanılır)
+1. Python 3.7+ gereklidir.
+2. Tüm şifrelemeler standart kütüphaneleri kullanır. Herhangi bir kütüphane import eklemenize gerek yoktur.
 
 ## Kullanım
 
@@ -86,6 +90,16 @@ python run_client.py
 - **Parametre**: Anahtar matris (2x2 veya 3x3)
 - **Örnek**: [[3,3],[2,5]] matrisi ile "HELLO" → "RIJVS"
 
+### 11. AES Şifreleme
+- **Mod**: CBC (IV mesaj içinde taşınır)
+- **Parametreler**: Anahtar (serbest uzunlukta, SHA-256 ile 32 bayta türetilir), isteğe bağlı IV
+- **Not**: IV girilmezse rastgele üretilir ve mesajın başına eklenir.
+
+### 12. DES Şifreleme
+- **Mod**: CBC
+- **Parametreler**: Anahtar (en az 8 karakter, MD5 ile 8 bayta türetilir), isteğe bağlı IV
+- **Not**: IV girilmezse rastgele üretilir ve mesajın başına eklenir.
+
 ## Proje Yapısı
 
 ```
@@ -98,7 +112,8 @@ python_client_server/
 │   └── server.py          # Sunucu
 ├── encryption/
 │   ├── __init__.py
-│   └── ciphers.py         # Şifreleme yöntemleri
+│   ├── ciphers.py         # Şifreleme yöntemleri
+│   └── ...
 ├── requirements.txt
 └── README.md
 ```
@@ -106,7 +121,7 @@ python_client_server/
 ## Özellikler
 
 - **Gerçek Zamanlı İletişim**: İstemci ve sunucu arasında anlık mesajlaşma
-- **10 Farklı Şifreleme Yöntemi**: Klasik ve modern şifreleme algoritmaları
+- **12 Farklı Şifreleme Yöntemi**: Klasik ve modern şifreleme algoritmaları
 - **Kullanıcı Dostu Arayüz**: Kolay kullanım için modern GUI
 - **Hata Yönetimi**: Kapsamlı hata yakalama ve kullanıcı bildirimleri
 - **Threading**: Arayüz donmadan çoklu işlem desteği
@@ -123,8 +138,3 @@ python_client_server/
 - Hill şifreleme için matris determinantı 26 ile aralarında asal olmalıdır
 - Polybius şifrelemede I ve J harfleri aynı pozisyonu paylaşır
 - Route şifreleme farklı rota türleri destekler (spiral, satır, sütun, diagonal)
-
-## Aşağıda Wireshark örneği eklenmiştir.
-
-
-![img.png](wireshark.png)
