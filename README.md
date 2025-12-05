@@ -25,7 +25,7 @@ Bu Python uygulaması, Tkinter GUI kullanarak modern bir arayüz sunar ve çeşi
 ## Kurulum
 
 1. Python 3.7+ gereklidir.
-2. Tüm şifrelemeler standart kütüphaneleri kullanır. Herhangi bir kütüphane import eklemenize gerek yoktur.
+2. Tüm şifrelemeler standart kütüphaneleri kullanır. Herhangi bir kütüphane eklemenize gerek yoktur.
 
 ## Kullanım
 
