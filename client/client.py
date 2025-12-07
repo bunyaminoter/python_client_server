@@ -19,24 +19,26 @@ from encryption.ciphers import EncryptionManager
 
 class ClientGUI:
     def __init__(self, root):
-        self.root = root
-        self.root.title("Şifreli İstemci-Sunucu Uygulaması")
-        self.root.geometry("800x600")
-        
-        self.client_socket = None
-        self.connected = False
-        self.host = '127.0.0.1'
-        self.port = 8001
-        
-        # Encryption manager
-        self.encryption_manager = EncryptionManager()
-        self.current_encryption = "none"
-        self.encryption_params = {}
-        
-        self.setup_ui()
-        self.connect_to_server()
+        def __init__(self, root):
+            self.root = root
+            self.root.title("Şifreli İstemci-Sunucu Uygulaması")
+            self.root.geometry("800x600")
 
-        def on_mode_changed(self):
+            self.client_socket = None
+            self.connected = False
+            self.host = '127.0.0.1'
+            self.port = 8001
+
+            # Encryption manager
+            self.encryption_manager = EncryptionManager()
+            self.current_encryption = "none"
+            self.encryption_params = {}
+
+            self.setup_ui()
+            self.connect_to_server()
+
+        # --- DÜZELTME BURADA: Bu fonksiyonu __init__'in dışına (sola) taşıdık ---
+    def on_mode_changed(self):
             """Kütüphane modu değişince tetiklenir"""
             # Sadece AES ve DES için kütüphane modu aktiftir
             method = self.encryption_var.get()
@@ -378,46 +380,64 @@ class ClientGUI:
                 self.status_label.config(text="Bağlantı Kesildi", foreground="red")
 
     def send_message(self, event=None):
-        # ... (Bağlantı kontrolleri aynı) ...
+        """Send message to server"""
+        # 1. Bağlantı Kontrolü
+        if not self.connected:
+            messagebox.showerror("Hata", "Sunucuya bağlı değil!")
+            return
+
+        # 2. Mesajı Al
+        message = self.message_entry.get().strip()
+        if not message:
+            return
 
         try:
+            # 3. Ayarları Güncelle
             self.update_encryption_settings()
+
+            # 4. Gönderilen (düz) mesajı ekrana bas
             self.display_message(f"Sen (gönderilen): {message}")
 
-            # Mod Seçimi
+            # 5. Mod Seçimi (Kütüphane vs Manuel)
             use_lib = self.use_lib_var.get()
             mode_str = "library" if use_lib else "manual"
 
-            # --- HİBRİT + MOD SEÇİMLİ ŞİFRELEME ---
+            # --- HİBRİT + MOD SEÇİMLİ ŞİFRELEME (AES/DES ve RSA varsa) ---
             if self.current_encryption in ["aes", "des"] and hasattr(self, 'server_public_key'):
+                # Rastgele oturum anahtarı oluştur (AES için 16, DES için 8 byte)
                 key_len = 16 if self.current_encryption == "aes" else 8
                 session_key = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+
+                # Parametrelere bu yeni anahtarı ekle (Şifreleme fonksiyonu bu anahtarı kullanacak)
                 self.encryption_params["key"] = session_key
 
-                # Encrypt çağrısına use_lib ekledik
+                # Mesajı şifrele (Kütüphane veya Manuel mod tercihi 'use_lib' ile iletiliyor)
                 encrypted_message = self.encryption_manager.encrypt(
                     message,
                     self.current_encryption,
-                    use_lib=use_lib,  # <-- ÖNEMLİ
+                    use_lib=use_lib,
                     **self.encryption_params
                 )
 
+                # Oturum anahtarını Sunucunun RSA Public Key'i ile şifrele (Anahtar Dağıtımı)
                 encrypted_session_key = RSACipher.encrypt(session_key, self.server_public_key)
 
+                # Paketi hazırla
                 message_data = {
                     'message': encrypted_message,
                     'method': self.current_encryption,
-                    'encrypted_aes_key': encrypted_session_key,
-                    'params': self.encryption_params,
-                    'impl_mode': mode_str  # <-- Sunucuya hangi modda çözmesi gerektiğini söylüyoruz
+                    'encrypted_aes_key': encrypted_session_key,  # RSA ile şifrelenmiş anahtar
+                    'params': self.encryption_params,  # IV vb. parametreler
+                    'impl_mode': mode_str  # Sunucuya hangi modda çözmesi gerektiğini bildir
                 }
 
+                # Kullanıcıya Bilgi Ver (Raporlama ve Debug için)
                 self.display_message(f"Mod: {mode_str.upper()}")
-                self.display_message(f"Oturum Anahtarı: {session_key}")
+                self.display_message(f"Oturum Anahtarı (Random): {session_key}")
                 self.display_message(f"Şifreli Mesaj: {encrypted_message}")
 
             else:
-                # Klasik yöntemler
+                # --- STANDART / DİĞER ŞİFRELEMELER (RSA yoksa veya Klasik yöntemlerse) ---
                 if self.current_encryption != "none":
                     encrypted_message = self.encryption_manager.encrypt(
                         message,
@@ -436,7 +456,10 @@ class ClientGUI:
                     'impl_mode': mode_str
                 }
 
+            # 6. Veriyi Sunucuya Gönder
             self.client_socket.send(json.dumps(message_data).encode('utf-8'))
+
+            # 7. Giriş kutusunu temizle
             self.message_entry.delete(0, tk.END)
 
         except Exception as e:
