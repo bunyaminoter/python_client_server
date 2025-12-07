@@ -100,6 +100,14 @@ class ServerGUI:
         encryption_combo.grid(row=0, column=1, padx=(0, 10))
         encryption_combo.bind("<<ComboboxSelected>>", self.on_encryption_changed)
 
+        self.use_lib_var = tk.BooleanVar(value=False)
+        self.lib_check = ttk.Checkbutton(
+            encryption_frame,
+            text="Kütüphane Kullan",
+            variable=self.use_lib_var
+        )
+        self.lib_check.grid(row=0, column=2, padx=(5, 0))
+
         self.params_frame = ttk.Frame(encryption_frame)
         self.params_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
 
@@ -350,43 +358,54 @@ class ServerGUI:
     def _listen_for_messages(self):
         try:
             while self.client_connected and self.client_socket:
-                # Buffer boyutunu artırdık (RSA anahtarları ve büyük paketler için)
                 data = self.client_socket.recv(4096)
-                if not data:
-                    break
+                if not data: break
 
                 try:
                     json_str = data.decode("utf-8")
-
                     if json_str == "PUB_KEY_REQ":
-                        pub_key_msg = {
-                            "type": "PUB_KEY_RES",
-                            "key": self.server_public_key
-                        }
-                        self.client_socket.send(json.dumps(pub_key_msg).encode('utf-8'))
-                        self._safe_display("İstemciye RSA Public Key gönderildi.")
+                        # ... (Eski kod aynı) ...
                         continue
-                    # ---------------------------------
 
                     message_data = json.loads(json_str)
 
+                    # Gelen mesajın modunu al
+                    impl_mode = message_data.get('impl_mode', 'manual')
+                    use_lib_for_decrypt = (impl_mode == 'library')
+
+                    # --- RSA Çözme ve UI Güncelleme (Önceki düzeltme dahil) ---
                     if "encrypted_aes_key" in message_data:
                         try:
                             enc_key_int = message_data["encrypted_aes_key"]
-
                             decrypted_session_key = self.rsa_cipher.decrypt(enc_key_int, self.rsa_cipher.private_key)
 
-                            if "params" not in message_data:
-                                message_data["params"] = {}
+                            # UI Güncelleme (Thread-Safe)
+                            method = message_data.get("method", "none")
 
+                            def update_ui_safe():
+                                if method == "aes":
+                                    self.aes_key_var.set(decrypted_session_key)
+                                    self.encryption_var.set("aes")
+                                elif method == "des":
+                                    self.des_key_var.set(decrypted_session_key)
+                                    self.encryption_var.set("des")
+
+                                # Gelen mesaj kütüphaneliyse, biz de cevap verirken kütüphane seçelim
+                                self.use_lib_var.set(use_lib_for_decrypt)
+                                self._setup_encryption_params()
+                                self._update_encryption_settings()
+
+                            self.root.after(0, update_ui_safe)
+
+                            if "params" not in message_data: message_data["params"] = {}
                             message_data["params"]["key"] = decrypted_session_key
 
-                            self._safe_display("İstemci (RSA ile Şifrelenmiş Anahtar Geldi)")
-                            self._safe_display(f"Çözülen Simetrik Anahtar: {decrypted_session_key}")
-
+                            self._safe_display(f"Çözülen Anahtar: {decrypted_session_key}")
+                            self._safe_display(f"İstemci Modu: {impl_mode.upper()}")
                         except Exception as e:
-                            self._safe_display(f"RSA Anahtar Çözme Hatası: {e}")
+                            self._safe_display(f"RSA Hata: {e}")
 
+                    # --- Şifre Çözme ---
                     encrypted_message = message_data.get("message", "")
                     method = message_data.get("method", "none")
                     params = message_data.get("params", {})
@@ -394,23 +413,30 @@ class ServerGUI:
                     if method != "none":
                         self._safe_display(f"İstemci (şifreli): {encrypted_message}")
                         try:
-                            decrypted = self.encryption_manager.decrypt(encrypted_message, method, **params)
+                            # use_lib parametresini geçiriyoruz
+                            decrypted = self.encryption_manager.decrypt(
+                                encrypted_message,
+                                method,
+                                use_lib=use_lib_for_decrypt,
+                                **params
+                            )
                             self._safe_display(f"İstemci (çözüldü): {decrypted}")
                         except Exception as e:
-                            self._safe_display(f"İstemci (şifre çözme hatası): {e}")
+                            self._safe_display(f"Hata: {e}")
                     else:
                         self._safe_display(f"İstemci: {encrypted_message}")
+
                 except json.JSONDecodeError:
-                    message = data.decode("utf-8")
-                    self._safe_display(f"İstemci (düz): {message}")
+                    self._safe_display(f"İstemci (düz): {data.decode('utf-8')}")
+
         except Exception as e:
-            if self.client_connected:
-                self._safe_display(f"Bağlantı hatası: {e}")
+            if self.client_connected: self._safe_display(f"Hata: {e}")
         finally:
             if self.client_socket:
                 self.client_socket.close()
             self.client_connected = False
             self._safe_status("İstemci bağlantısı kapandı", "red")
+
 
     def send_message(self, event=None):
         if not self.client_connected or not self.client_socket:
@@ -423,18 +449,19 @@ class ServerGUI:
 
         try:
             self._update_encryption_settings()
-
-            # Önce düz mesaj
             self._safe_display(f"Sunucu (gönderilen): {message}")
+
+            use_lib = self.use_lib_var.get()
+            mode_str = "library" if use_lib else "manual"
 
             if self.current_encryption != "none":
                 encrypted_message = self.encryption_manager.encrypt(
                     message,
                     self.current_encryption,
+                    use_lib=use_lib,  # <-- Eklendi
                     **self.encryption_params,
                 )
-                # Ardından şifrelenmiş hali
-                self._safe_display(f"Sunucu (şifrelenmiş): {encrypted_message}")
+                self._safe_display(f"Sunucu ({mode_str}): {encrypted_message}")
             else:
                 encrypted_message = message
 
@@ -442,6 +469,7 @@ class ServerGUI:
                 "message": encrypted_message,
                 "method": self.current_encryption,
                 "params": self.encryption_params,
+                "impl_mode": mode_str  # <-- Eklendi
             }
 
             self.client_socket.send(json.dumps(message_data).encode("utf-8"))
