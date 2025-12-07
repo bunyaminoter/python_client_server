@@ -359,78 +359,105 @@ class ServerGUI:
         try:
             while self.client_connected and self.client_socket:
                 data = self.client_socket.recv(4096)
-                if not data: break
+                if not data:
+                    break
 
                 try:
                     json_str = data.decode("utf-8")
+
+                    # --- 1. RSA HANDSHAKE KONTROLÜ ---
                     if json_str == "PUB_KEY_REQ":
-                        # ... (Eski kod aynı) ...
+                        pub_key_msg = {
+                            "type": "PUB_KEY_RES",
+                            "key": self.server_public_key
+                        }
+                        self.client_socket.send(json.dumps(pub_key_msg).encode('utf-8'))
+                        self._safe_display("İstemciye RSA Public Key gönderildi.")
                         continue
+                    # ---------------------------------
 
                     message_data = json.loads(json_str)
 
-                    # Gelen mesajın modunu al
+                    # Gelen mesajın modunu al (Kütüphane mi Manuel mi?)
                     impl_mode = message_data.get('impl_mode', 'manual')
                     use_lib_for_decrypt = (impl_mode == 'library')
 
-                    # --- RSA Çözme ve UI Güncelleme (Önceki düzeltme dahil) ---
+                    # --- 2. HİBRİT DECRYPTION (RSA ile AES Anahtarını Çözme) ---
                     if "encrypted_aes_key" in message_data:
                         try:
                             enc_key_int = message_data["encrypted_aes_key"]
+
+                            # RSA Private Key ile simetrik anahtarı çöz
                             decrypted_session_key = self.rsa_cipher.decrypt(enc_key_int, self.rsa_cipher.private_key)
 
-                            # UI Güncelleme (Thread-Safe)
+                            # --- UI GÜNCELLEME (Thread-Safe) ---
                             method = message_data.get("method", "none")
 
                             def update_ui_safe():
+                                # 1. Metodu ComboBox'ta seç
+                                if method in ["aes", "des"]:
+                                    self.encryption_var.set(method)
+
+                                # 2. Kütüphane modunu (Checkbox) ayarla
+                                self.use_lib_var.set(use_lib_for_decrypt)
+
+                                # 3. Arayüzü yeniden oluştur (DİKKAT: Bu işlem kutuları varsayılana sıfırlar!)
+                                self._setup_encryption_params()
+
+                                # 4. KRİTİK DÜZELTME: Anahtarı, arayüz oluştuktan SONRA yazıyoruz
                                 if method == "aes":
                                     self.aes_key_var.set(decrypted_session_key)
-                                    self.encryption_var.set("aes")
                                 elif method == "des":
                                     self.des_key_var.set(decrypted_session_key)
-                                    self.encryption_var.set("des")
 
-                                # Gelen mesaj kütüphaneliyse, biz de cevap verirken kütüphane seçelim
-                                self.use_lib_var.set(use_lib_for_decrypt)
-                                self._setup_encryption_params()
+                                # 5. EncryptionManager'ı güncelle
                                 self._update_encryption_settings()
 
                             self.root.after(0, update_ui_safe)
+                            # -----------------------------------
 
-                            if "params" not in message_data: message_data["params"] = {}
+                            # params['key'] alanını RSA'dan çıkan anahtarla güncelle
+                            if "params" not in message_data:
+                                message_data["params"] = {}
                             message_data["params"]["key"] = decrypted_session_key
 
+                            self._safe_display("İstemci (RSA ile Şifrelenmiş Anahtar Geldi)")
                             self._safe_display(f"Çözülen Anahtar: {decrypted_session_key}")
                             self._safe_display(f"İstemci Modu: {impl_mode.upper()}")
-                        except Exception as e:
-                            self._safe_display(f"RSA Hata: {e}")
 
-                    # --- Şifre Çözme ---
+                        except Exception as e:
+                            self._safe_display(f"RSA Anahtar Çözme Hatası: {e}")
+
+                    # --- 3. ŞİFRELİ MESAJI ÇÖZME ---
                     encrypted_message = message_data.get("message", "")
                     method = message_data.get("method", "none")
                     params = message_data.get("params", {})
 
                     if method != "none":
+                        # Önce gelen şifreli mesajı ekrana bas
                         self._safe_display(f"İstemci (şifreli): {encrypted_message}")
                         try:
-                            # use_lib parametresini geçiriyoruz
+                            # Mod bilgisini (use_lib) decrypt fonksiyonuna geçir
                             decrypted = self.encryption_manager.decrypt(
                                 encrypted_message,
                                 method,
                                 use_lib=use_lib_for_decrypt,
                                 **params
                             )
+                            # Sonra çözülmüş halini ekrana bas
                             self._safe_display(f"İstemci (çözüldü): {decrypted}")
                         except Exception as e:
-                            self._safe_display(f"Hata: {e}")
+                            self._safe_display(f"İstemci (şifre çözme hatası): {e}")
                     else:
                         self._safe_display(f"İstemci: {encrypted_message}")
 
                 except json.JSONDecodeError:
-                    self._safe_display(f"İstemci (düz): {data.decode('utf-8')}")
+                    message = data.decode("utf-8")
+                    self._safe_display(f"İstemci (düz): {message}")
 
         except Exception as e:
-            if self.client_connected: self._safe_display(f"Hata: {e}")
+            if self.client_connected:
+                self._safe_display(f"Bağlantı hatası: {e}")
         finally:
             if self.client_socket:
                 self.client_socket.close()
