@@ -15,6 +15,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 from typing import List
+from encryption.rsa import RSACipher
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from encryption.ciphers import EncryptionManager
@@ -35,6 +36,14 @@ class ServerGUI:
         self.client_connected = False
 
         self.encryption_manager = EncryptionManager()
+
+        from encryption.rsa import RSACipher  # (Eğer dosyanın başında import etmediyseniz)
+
+        self._safe_status("RSA Anahtarları üretiliyor...", "orange")
+        self.rsa_cipher = RSACipher(key_size=1024)  # RSA nesnesini başlat
+        self.server_public_key = self.rsa_cipher.public_key  # İstemcilere dağıtılacak anahtar
+        print("RSA Anahtarları oluşturuldu.")
+
         self.current_encryption = "none"
         self.encryption_params: dict = {}
 
@@ -341,22 +350,51 @@ class ServerGUI:
     def _listen_for_messages(self):
         try:
             while self.client_connected and self.client_socket:
-                data = self.client_socket.recv(1024)
+                # Buffer boyutunu artırdık (RSA anahtarları ve büyük paketler için)
+                data = self.client_socket.recv(4096)
                 if not data:
                     break
-                
+
                 try:
-                    message_data = json.loads(data.decode("utf-8"))
+                    json_str = data.decode("utf-8")
+
+                    if json_str == "PUB_KEY_REQ":
+                        pub_key_msg = {
+                            "type": "PUB_KEY_RES",
+                            "key": self.server_public_key
+                        }
+                        self.client_socket.send(json.dumps(pub_key_msg).encode('utf-8'))
+                        self._safe_display("İstemciye RSA Public Key gönderildi.")
+                        continue
+                    # ---------------------------------
+
+                    message_data = json.loads(json_str)
+
+                    if "encrypted_aes_key" in message_data:
+                        try:
+                            enc_key_int = message_data["encrypted_aes_key"]
+
+                            decrypted_session_key = self.rsa_cipher.decrypt(enc_key_int, self.rsa_cipher.private_key)
+
+                            if "params" not in message_data:
+                                message_data["params"] = {}
+
+                            message_data["params"]["key"] = decrypted_session_key
+
+                            self._safe_display("İstemci (RSA ile Şifrelenmiş Anahtar Geldi)")
+                            self._safe_display(f"Çözülen Simetrik Anahtar: {decrypted_session_key}")
+
+                        except Exception as e:
+                            self._safe_display(f"RSA Anahtar Çözme Hatası: {e}")
+
                     encrypted_message = message_data.get("message", "")
                     method = message_data.get("method", "none")
                     params = message_data.get("params", {})
 
                     if method != "none":
-                        # Önce gelen şifreli mesaj
                         self._safe_display(f"İstemci (şifreli): {encrypted_message}")
                         try:
                             decrypted = self.encryption_manager.decrypt(encrypted_message, method, **params)
-                            # Sonra çözülmüş hali
                             self._safe_display(f"İstemci (çözüldü): {decrypted}")
                         except Exception as e:
                             self._safe_display(f"İstemci (şifre çözme hatası): {e}")

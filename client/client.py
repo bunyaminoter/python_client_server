@@ -9,6 +9,9 @@ import threading
 import json
 import sys
 import os
+from encryption.rsa import RSACipher
+import random
+import string
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from encryption.ciphers import EncryptionManager
@@ -296,13 +299,18 @@ class ClientGUI:
         """Connect to server in separate thread"""
         def connect():
             try:
-                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.client_socket.connect((self.host, self.port))
+
+                self.client_socket.send("PUB_KEY_REQ".encode('utf-8'))
+                resp = self.client_socket.recv(4096)
+                resp_data = json.loads(resp.decode('utf-8'))
+
+                if resp_data.get("type") == "PUB_KEY_RES":
+                    self.server_public_key = tuple(resp_data["key"])
+                    self.display_message("Sunucu RSA Public Key alındı.")
+                # ---------------------------
+
                 self.connected = True
-                self.status_label.config(text="Bağlandı", foreground="green")
-                self.display_message("Sunucuya bağlandı.")
-                
-                # Start listening for messages
                 self.listen_for_messages()
                 
             except Exception as e:
@@ -352,47 +360,71 @@ class ClientGUI:
                 self.display_message(f"Bağlantı hatası: {e}")
                 self.connected = False
                 self.status_label.config(text="Bağlantı Kesildi", foreground="red")
-    
+
     def send_message(self, event=None):
         """Send message to server"""
         if not self.connected:
             messagebox.showerror("Hata", "Sunucuya bağlı değil!")
             return
-        
+
         message = self.message_entry.get().strip()
         if not message:
             return
-        
+
         try:
-            # Update encryption settings
+            # Arayüzdeki güncel parametreleri al
             self.update_encryption_settings()
 
             # İlk önce gönderilen (düz) mesajı göster
             self.display_message(f"Sen (gönderilen): {message}")
 
-            # Encrypt message if needed
-            if self.current_encryption != "none":
+            if self.current_encryption in ["aes", "des"] and hasattr(self, 'server_public_key'):
+
+                key_len = 16 if self.current_encryption == "aes" else 8
+                session_key = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+
+                self.encryption_params["key"] = session_key
+
                 encrypted_message = self.encryption_manager.encrypt(
                     message,
                     self.current_encryption,
                     **self.encryption_params
                 )
-                # Ardından şifrelenmiş halini göster
-                self.display_message(f"Sen (şifrelenmiş): {encrypted_message}")
+
+                encrypted_session_key = RSACipher.encrypt(session_key, self.server_public_key)
+
+                message_data = {
+                    'message': encrypted_message,
+                    'method': self.current_encryption,
+                    'encrypted_aes_key': encrypted_session_key,
+                    'params': self.encryption_params
+                }
+
+                self.display_message(f"Oluşturulan Oturum Anahtarı: {session_key}")
+                self.display_message(f"RSA ile Şifrelenmiş Anahtar: {str(encrypted_session_key)[:30]}...")
+                self.display_message(f"Sen (şifrelenmiş mesaj): {encrypted_message}")
+
             else:
-                encrypted_message = message
-            
-            # Prepare message data
-            message_data = {
-                'message': encrypted_message,
-                'method': self.current_encryption,
-                'params': self.encryption_params
-            }
-            
-            # Send message
+                if self.current_encryption != "none":
+                    encrypted_message = self.encryption_manager.encrypt(
+                        message,
+                        self.current_encryption,
+                        **self.encryption_params
+                    )
+                    self.display_message(f"Sen (şifrelenmiş): {encrypted_message}")
+                else:
+                    encrypted_message = message
+
+                message_data = {
+                    'message': encrypted_message,
+                    'method': self.current_encryption,
+                    'params': self.encryption_params
+                }
+
+            # Mesajı sunucuya gönder
             self.client_socket.send(json.dumps(message_data).encode('utf-8'))
             self.message_entry.delete(0, tk.END)
-            
+
         except Exception as e:
             messagebox.showerror("Hata", f"Mesaj gönderme hatası: {e}")
     
