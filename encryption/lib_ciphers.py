@@ -9,8 +9,8 @@ class LibAESCipher:
 
     @staticmethod
     def _derive_key(key: str) -> bytes:
-        # Manuel mod ile aynı anahtarı üretmek için SHA-256 kullanıyoruz
-        return hashlib.sha256(key.encode('utf-8')).digest()
+        # DEĞİŞİKLİK: Manuel modla uyum için ilk 16 byte (128-bit) alınıyor
+        return hashlib.sha256(key.encode('utf-8')).digest()[:16]
 
     @staticmethod
     def encrypt(text: str, key: str, iv: str | None = None) -> str:

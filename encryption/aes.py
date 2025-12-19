@@ -42,9 +42,9 @@ class AESCipher(_SymmetricCipherBase):
     @staticmethod
     def _derive_key(key: str) -> bytes:
         _SymmetricCipherBase._require_key(key, "AES")
-        # 32 byte digest -> AES-256 (Nk=8, Nr=14). Users still free to pass shorter keys.
+        # ECC'den gelen key zaten string formatında olabilir, yine de hashleyip kırpıyoruz
         digest = hashlib.sha256(key.encode('utf-8')).digest()
-        return digest
+        return digest[:16]  # AES-128 #ilk 16 biti alarak 128 bite düşürdüm projede istenildiği için
 
     @staticmethod
     def _xtime(a: int) -> int:
@@ -240,6 +240,7 @@ class AESCipher(_SymmetricCipherBase):
         padded = b''.join(blocks)
         plaintext = cls._pkcs7_unpad(padded)
         return plaintext.decode('utf-8')
+
 
 
 
