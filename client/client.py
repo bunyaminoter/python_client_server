@@ -33,6 +33,9 @@ class ClientGUI:
 
         self.encryption_manager = EncryptionManager()
 
+        # GÜVENLİK GÜNCELLEMESİ: Son kullanılan oturum anahtarını hafızada tut
+        self.current_session_key = None
+
         # UI Değişkenleri
         self.enc_method_var = tk.StringVar(value="none")
         self.key_dist_var = tk.StringVar(value="RSA")
@@ -231,9 +234,16 @@ class ClientGUI:
                 session_key = "Bilinmiyor"
                 decrypted_msg = ""
 
-                # 1. Simülasyon: Sunucu anahtarı parametrede gönderdiyse al (AES/DES için)
-                if method in ["aes", "des"] and 'key' in params:
-                    session_key = params['key']
+                # GÜVENLİK GÜNCELLEMESİ (Receiver Side)
+                # 1. Eğer params içinde key varsa (eski usül/güvensiz) onu kullan
+                if method in ["aes", "des"]:
+                    if 'key' in params:
+                        session_key = params['key']
+                    # 2. Key yoksa hafızadaki son anahtarı kullan (GÜVENLİ)
+                    elif self.current_session_key:
+                        session_key = self.current_session_key
+                        # Şifre çözücü fonksiyona göndermek için params içine ekle
+                        params['key'] = session_key
 
                 # 2. Mesajı Çöz
                 use_lib = (impl_mode == 'library')
@@ -292,11 +302,8 @@ class ClientGUI:
 
                 # A) Anahtar Dağıtımı (Key Distribution)
                 if dist_method == "RSA":
-                    # Rastgele simetrik anahtar üret
                     session_key = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
-                    # Anahtarı sunucunun Public Key'i ile şifrele
                     enc_session_key = RSACipher.encrypt(session_key, self.server_rsa_pub)
-
                     final_payload['encrypted_key'] = enc_session_key
                     final_payload['key_dist'] = 'RSA'
 
@@ -304,18 +311,19 @@ class ClientGUI:
                     client_ecc = ECCCipher()
                     full_secret = client_ecc.generate_shared_secret(self.server_ecc_pub)
                     session_key = full_secret[:key_len]
-
                     final_payload['ecc_public_key'] = client_ecc.public_key
                     final_payload['key_dist'] = 'ECC'
 
-                # B) Mesaj Şifreleme (Yerel işlem için anahtar gerekli)
+                # B) Anahtarı Hafızaya Kaydet (Sunucudan geri dönmeyecek!)
+                self.current_session_key = session_key
+
+                # C) Mesaj Şifreleme
                 params = {"key": session_key}
                 enc_msg = self.encryption_manager.encrypt(msg, method, use_lib=use_lib, **params)
                 enc_msg_display = enc_msg
 
-                # C) GÜVENLİK DÜZELTMESİ:
-                # Sunucuya gidecek parametrelerden 'key'i çıkartıyoruz.
-                # Sunucu anahtarı zaten 'encrypted_key' veya ECC ile elde edecek.
+                # D) GÜVENLİK DÜZELTMESİ:
+                # Ağ paketine koyulacak parametrelerden 'key'i siliyoruz.
                 payload_params = params.copy()
                 if 'key' in payload_params:
                     del payload_params['key']
@@ -324,7 +332,7 @@ class ClientGUI:
                     'message': enc_msg,
                     'method': method,
                     'impl_mode': mode_str,
-                    'params': payload_params  # Düzeltildi: Artık içinde plaintext key yok
+                    'params': payload_params  # Key içermeyen parametreler
                 })
 
             # --- SENARYO 3: BASİT ŞİFRELEMELER (Caesar vb.) ---
@@ -337,9 +345,6 @@ class ClientGUI:
                     enc_msg = msg
 
                 enc_msg_display = enc_msg
-
-                # Basit şifrelemelerde (örneğin Caesar shift) parametrelerin gitmesi gerekebilir,
-                # çünkü bu senaryoda anahtar değişimi simüle edilmiyor, direkt parametre gidiyor.
                 final_payload = {
                     'message': enc_msg,
                     'method': method,

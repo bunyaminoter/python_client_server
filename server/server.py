@@ -31,7 +31,7 @@ class ServerGUI:
 
         # UI Değişkenleri
         self.enc_method_var = tk.StringVar(value="none")
-        self.status_var = tk.StringVar(value="Başlatılıyor...")  # Durum metni için değişken
+        self.status_var = tk.StringVar(value="Başlatılıyor...")
 
         # 1. ARAYÜZÜ OLUŞTUR
         self.setup_ui()
@@ -58,7 +58,6 @@ class ServerGUI:
         status_frame.pack(fill=tk.X, pady=(0, 10))
         ttk.Label(status_frame, text="Durum:").pack(side=tk.LEFT)
 
-        # Durum Label'ı (Değişken ile güncellenecek)
         self.status_label = ttk.Label(status_frame, textvariable=self.status_var, foreground="orange",
                                       font=("Arial", 10, "bold"))
         self.status_label.pack(side=tk.LEFT, padx=5)
@@ -163,7 +162,6 @@ class ServerGUI:
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.server_socket.bind((self.host, self.port))
 
-            # --- DURUM GÜNCELLEME: DİNLENİYOR ---
             self.server_socket.listen(1)
             self.update_status("İstemci Bekleniyor... (Dinleniyor)", "blue")
             self.log_gui(f"Sunucu {self.port} portunda dinlemeye başladı.")
@@ -172,7 +170,6 @@ class ServerGUI:
             self.client_socket = client
             self.connected = True
 
-            # --- DURUM GÜNCELLEME: BAĞLANDI ---
             self.update_status(f"Bağlandı: {addr[0]}", "green")
             self.log_gui(f"İstemci bağlandı: {addr}")
 
@@ -189,7 +186,6 @@ class ServerGUI:
 
                 txt = data.decode('utf-8')
 
-                # Handshake
                 if txt == "PUB_KEY_REQ":
                     resp = {"rsa_pub": self.rsa.public_key, "ecc_pub": self.ecc.public_key}
                     self.client_socket.send(json.dumps(resp).encode('utf-8'))
@@ -201,7 +197,6 @@ class ServerGUI:
                 self.log_gui(f"Bağlantı hatası: {e}")
                 break
 
-        # Döngü biterse bağlantı kopmuştur
         self.connected = False
         self.update_status("Bağlantı Kesildi", "red")
 
@@ -224,7 +219,10 @@ class ServerGUI:
             elif key_dist == "ECC" and 'ecc_public_key' in data:
                 full_secret = self.ecc.generate_shared_secret(tuple(data['ecc_public_key']))
                 session_key = full_secret[:key_len]
+            elif 'key' in params: # Fallback
+                session_key = params['key']
 
+            # Decrypt işlemi için anahtarı params'a koyuyoruz (fakat sonraki yanıtta göndermeyeceğiz)
             params['key'] = session_key
 
             # 2. Arayüzü Güncelle (Otomatik Algılama)
@@ -284,11 +282,17 @@ class ServerGUI:
             else:
                 enc_msg = msg
 
-                # Gönder
+            # GÜVENLİK DÜZELTMESİ (Server Side):
+            # Cevap verirken anahtarı pakete koyma! İstemci zaten biliyor.
+            payload_params = params.copy()
+            if 'key' in payload_params:
+                del payload_params['key']
+
+            # Gönder
             payload = {
                 'message': enc_msg,
                 'method': method if method != 'rsa' else 'none',
-                'params': params,
+                'params': payload_params,
                 'impl_mode': mode_str
             }
 
