@@ -290,10 +290,13 @@ class ClientGUI:
             elif method in ["aes", "des"]:
                 key_len = 16 if method == "aes" else 8
 
-                # A) Anahtar Dağıtımı
+                # A) Anahtar Dağıtımı (Key Distribution)
                 if dist_method == "RSA":
+                    # Rastgele simetrik anahtar üret
                     session_key = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                    # Anahtarı sunucunun Public Key'i ile şifrele
                     enc_session_key = RSACipher.encrypt(session_key, self.server_rsa_pub)
+
                     final_payload['encrypted_key'] = enc_session_key
                     final_payload['key_dist'] = 'RSA'
 
@@ -301,19 +304,27 @@ class ClientGUI:
                     client_ecc = ECCCipher()
                     full_secret = client_ecc.generate_shared_secret(self.server_ecc_pub)
                     session_key = full_secret[:key_len]
+
                     final_payload['ecc_public_key'] = client_ecc.public_key
                     final_payload['key_dist'] = 'ECC'
 
-                # B) Mesaj Şifreleme
+                # B) Mesaj Şifreleme (Yerel işlem için anahtar gerekli)
                 params = {"key": session_key}
                 enc_msg = self.encryption_manager.encrypt(msg, method, use_lib=use_lib, **params)
                 enc_msg_display = enc_msg
+
+                # C) GÜVENLİK DÜZELTMESİ:
+                # Sunucuya gidecek parametrelerden 'key'i çıkartıyoruz.
+                # Sunucu anahtarı zaten 'encrypted_key' veya ECC ile elde edecek.
+                payload_params = params.copy()
+                if 'key' in payload_params:
+                    del payload_params['key']
 
                 final_payload.update({
                     'message': enc_msg,
                     'method': method,
                     'impl_mode': mode_str,
-                    'params': params  # Sunucu parametreleri görsün
+                    'params': payload_params  # Düzeltildi: Artık içinde plaintext key yok
                 })
 
             # --- SENARYO 3: BASİT ŞİFRELEMELER (Caesar vb.) ---
@@ -326,6 +337,9 @@ class ClientGUI:
                     enc_msg = msg
 
                 enc_msg_display = enc_msg
+
+                # Basit şifrelemelerde (örneğin Caesar shift) parametrelerin gitmesi gerekebilir,
+                # çünkü bu senaryoda anahtar değişimi simüle edilmiyor, direkt parametre gidiyor.
                 final_payload = {
                     'message': enc_msg,
                     'method': method,
