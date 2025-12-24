@@ -1,2 +1,4 @@
-# Tüm şifrelemeler standart kütüphaneleri kullanır. Herhangi bir kütüphane import eklemenize gerek yoktur.
-# pycryptodome kütüphanesini import ederek karşılaştırabilirsiniz.
+# Kütüphane modu için gerekli paketler
+pycryptodome>=3.19.0
+
+# Not: Manuel modlar için ek kütüphane gerekmez, standart Python kütüphaneleri yeterlidir.

@@ -6,7 +6,7 @@ Bu Python uygulaması, Tkinter GUI kullanarak modern bir arayüz sunar ve çeşi
 
 ## Özellikler
 
-- **GUI İstemci**: Tkinter ile modern arayüz
+- **GUI İstemci**: Tkinter ile modern, şık arayüz
 - **Sunucu**: Socket tabanlı çoklu istemci desteği
 - **Şifreleme Yöntemleri**:
   - Caesar Şifreleme
@@ -19,8 +19,16 @@ Bu Python uygulaması, Tkinter GUI kullanarak modern bir arayüz sunar ve çeşi
   - Polybius Şifreleme
   - Pigpen Şifreleme
   - Hill Şifreleme
-  - AES (CBC, 256-bit anahtar türetme)
-  - DES (CBC, 64-bit anahtar türetme)
+  - **AES-128** (CBC, Manuel - S-box tabloları olmadan dinamik hesaplama)
+  - **AES-128** (CBC, Kütüphane - PyCryptodome)
+  - **AES-128 + RSA** (Anahtar dağıtımı için RSA)
+  - **AES-128 + ECC** (Anahtar dağıtımı için ECC, sadece manuel)
+  - **DES** (CBC, Manuel)
+  - **DES** (CBC, Kütüphane - PyCryptodome)
+  - **DES + RSA** (Anahtar dağıtımı için RSA)
+  - **DES + ECC** (Anahtar dağıtımı için ECC, sadece manuel)
+  - **RSA** (Anahtar dağıtımı - Manuel implementasyon, 1024-bit)
+  - **ECC** (Anahtar dağıtımı - Manuel implementasyon, P-256 eğrisi, ECDH)
 
 ## Kurulum
 
@@ -94,11 +102,68 @@ python run_client.py
 - **Mod**: CBC (IV mesaj içinde taşınır)
 - **Parametreler**: Anahtar (serbest uzunlukta, SHA-256 ile 32 bayta türetilir), isteğe bağlı IV
 - **Not**: IV girilmezse rastgele üretilir ve mesajın başına eklenir.
+- **Özel Özellik**: S-box tabloları kullanmadan, dinamik hesaplama ile implementasyon
+  - Galois Field (GF(2^8)) matematik işlemleri
+  - Multiplicative inverse hesaplama
+  - Affine transformation
+  - Her byte için S-box değeri runtime'da hesaplanır
 
 ### 12. DES Şifreleme
 - **Mod**: CBC
 - **Parametreler**: Anahtar (en az 8 karakter, MD5 ile 8 bayta türetilir), isteğe bağlı IV
 - **Not**: IV girilmezse rastgele üretilir ve mesajın başına eklenir.
+
+### 13. RSA Şifreleme (Anahtar Dağıtımı)
+- **Kullanım Amacı**: Oturum anahtarlarını (AES/DES anahtarları) güvenli şekilde dağıtmak için
+- **Anahtar Boyutu**: 1024-bit (varsayılan)
+- **Algoritma**: Manuel implementasyon
+  - Asal sayı üretimi (Miller-Rabin testi)
+  - Key pair oluşturma (p, q asallarından n = p*q, e, d hesaplama)
+  - Public Key: (e, n) - Şifreleme için
+  - Private Key: (d, n) - Çözme için
+- **Şifreleme**: c = m^e mod n
+- **Çözme**: m = c^d mod n
+- **Not**: RSA sadece oturum anahtarlarını şifrelemek için kullanılır. Gerçek mesajlar AES veya DES ile şifrelenir.
+- **Akış**:
+  1. Sunucu RSA key pair üretir (public + private key)
+  2. Sunucu public key'i istemciye gönderir
+  3. İstemci AES/DES oturum anahtarını üretir
+  4. İstemci oturum anahtarını RSA public key ile şifreler
+  5. Şifrelenmiş anahtar sunucuya gönderilir
+  6. Sunucu RSA private key ile anahtarı çözer
+  7. Çözülen anahtar ile mesajlar AES/DES ile şifrelenir
+
+### 14. ECC (Elliptic Curve Cryptography) - Anahtar Dağıtımı
+- **Kullanım Amacı**: Oturum anahtarlarını (AES/DES anahtarları) güvenli şekilde dağıtmak için
+- **Eğri**: P-256 (secp256r1, NIST P-256)
+- **Algoritma**: ECDH (Elliptic Curve Diffie-Hellman) - Manuel implementasyon
+- **Parametreler**:
+  - Prime modulus: p = 2^256 - 2^224 + 2^192 + 2^96 - 1
+  - Curve equation: y² = x³ - 3x + b (mod p)
+  - Generator point G: (x, y) koordinatları
+  - Order n: Eğrinin mertebesi
+- **Matematiksel İşlemler**:
+  - Point addition: İki noktanın toplamı
+  - Scalar multiplication: Bir noktanın bir sayı ile çarpımı (double-and-add algoritması)
+- **Anahtar Üretimi**:
+  1. Her taraf rastgele bir private key seçer (1 < d < n)
+  2. Public key = d * G (scalar multiplication)
+  3. Public key'ler karşılıklı olarak paylaşılır
+- **Ortak Sır Üretimi (ECDH)**:
+  - Shared secret = private_key * other_public_key
+  - Shared secret'in x koordinatı alınır
+  - SHA-256 hash ile 32 byte anahtar üretilir
+  - Bu anahtar AES/DES oturum anahtarı olarak kullanılır
+- **Not**: ECC sadece manuel modda kullanılabilir (kütüphane modu desteklenmez)
+- **Not**: ECC sadece oturum anahtarlarını üretmek için kullanılır. Gerçek mesajlar AES veya DES ile şifrelenir.
+- **Akış**:
+  1. Sunucu ECC key pair üretir (private + public key)
+  2. Sunucu public key'i istemciye gönderir
+  3. İstemci kendi ECC key pair'ini üretir
+  4. İstemci kendi public key'ini sunucuya gönderir
+  5. Her iki taraf da karşı tarafın public key'i ile kendi private key'ini kullanarak ortak sır üretir
+  6. Ortak sırdan AES/DES oturum anahtarı türetilir
+  7. Bu anahtar ile mesajlar AES/DES ile şifrelenir
 
 ## Proje Yapısı
 
@@ -121,8 +186,12 @@ python_client_server/
 ## Özellikler
 
 - **Gerçek Zamanlı İletişim**: İstemci ve sunucu arasında anlık mesajlaşma
-- **12 Farklı Şifreleme Yöntemi**: Klasik ve modern şifreleme algoritmaları
-- **Kullanıcı Dostu Arayüz**: Kolay kullanım için modern GUI
+- **Çoklu Şifreleme Yöntemi**: Klasik ve modern şifreleme algoritmaları
+- **Modern Arayüz**: Şık, göze hitap eden GUI tasarımı
+- **Performans Analizi**: Her mesaj için şifreleme süresi ölçümü
+- **Anahtar Dağıtımı**: RSA ve ECC ile güvenli anahtar değişimi
+- **Manuel ve Kütüphane Modları**: AES ve DES için hem manuel hem kütüphane implementasyonları
+- **S-box Olmadan AES**: S-box tabloları kullanmadan dinamik hesaplama
 - **Hata Yönetimi**: Kapsamlı hata yakalama ve kullanıcı bildirimleri
 - **Threading**: Arayüz donmadan çoklu işlem desteği
 - **Parametrik Şifreleme**: Her şifreleme yöntemi için özelleştirilebilir parametreler
@@ -138,3 +207,7 @@ python_client_server/
 - Hill şifreleme için matris determinantı 26 ile aralarında asal olmalıdır
 - Polybius şifrelemede I ve J harfleri aynı pozisyonu paylaşır
 - Route şifreleme farklı rota türleri destekler (spiral, satır, sütun, diagonal)
+- **AES Manuel Mod**: S-box tabloları kullanmaz, her byte için Galois Field matematik işlemleri ile dinamik hesaplama yapar
+- **RSA Anahtar Dağıtımı**: Sadece oturum anahtarlarını şifrelemek için kullanılır, mesajlar AES/DES ile şifrelenir
+- **ECC Anahtar Dağıtımı**: Sadece manuel modda kullanılabilir, ECDH ile ortak sır üretilir
+- **Performans Ölçümü**: Her mesaj için şifreleme/çözme süresi milisaniye cinsinden gösterilir

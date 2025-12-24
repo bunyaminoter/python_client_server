@@ -5,17 +5,23 @@ import hashlib
 class ECCCipher:
     """
     Basit ECDH (Elliptic Curve Diffie-Hellman) Implementasyonu.
-    Eğri: secp256k1 (Bitcoin'in kullandığı eğri) parametreleri.
+    Eğri: P-256 (secp256r1, NIST P-256) parametreleri.
+    PyCryptodome ile uyumlu olması için P-256 kullanılıyor (secp256k1 desteklenmiyor).
     Amaç: İki tarafın ortak bir gizli anahtar (session key) oluşturması.
     """
 
-    # secp256k1 Parametreleri
-    P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
-    A = 0
-    B = 7
-    G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
-         0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8)
-    N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    # P-256 (secp256r1) Parametreleri - PyCryptodome ile uyumlu
+    # Prime modulus: p = 2^256 - 2^224 + 2^192 + 2^96 - 1
+    P = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
+    # a = -3 (mod p)
+    A = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFC
+    # b parameter
+    B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
+    # Generator point G
+    G = (0x6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296,
+         0x4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5)
+    # Order n
+    N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 
     def __init__(self):
         self.private_key = random.randrange(1, self.N)
@@ -31,7 +37,7 @@ class ECCCipher:
         # Ortak sırrın x koordinatını alıp SHA-256 ile hashliyoruz
         # Böylece AES/DES için temiz bir byte dizisi elde ediyoruz.
         secret_bytes = shared_point[0].to_bytes(32, 'big')
-        return hashlib.sha256(secret_bytes).hexdigest()  # String olarak döndür (32 byte hex -> 64 char)
+        return hashlib.sha256(secret_bytes).digest()  # BYTES olarak döndür (32 byte)
 
     # --- Matematiksel Yardımcı Fonksiyonlar (Manuel Implementasyon) ---
 
@@ -46,7 +52,9 @@ class ECCCipher:
             return None
 
         if x1 == x2:
-            m = (3 * x1 * x1 + self.A) * pow(2 * y1, self.P - 2, self.P)
+            # Point doubling: m = (3x^2 + a) / (2y) where a = -3 for P-256
+            # So: m = (3x^2 - 3) / (2y) = 3(x^2 - 1) / (2y)
+            m = ((3 * x1 * x1 - 3) % self.P) * pow(2 * y1, self.P - 2, self.P)
         else:
             m = (y1 - y2) * pow(x1 - x2, self.P - 2, self.P)
 

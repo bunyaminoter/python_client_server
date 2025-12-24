@@ -118,10 +118,22 @@ class DESCipher(_SymmetricCipherBase):
     _SHIFT_SCHEDULE = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
     @staticmethod
-    def _derive_key(key: str) -> bytes:
-        _SymmetricCipherBase._require_key(key, "DES")
-        digest = hashlib.md5(key.encode('utf-8')).digest()
-        return digest[:8]
+    def _derive_key(key) -> bytes:
+        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        if isinstance(key, bytes):
+            # Zaten bytes, direkt kullan (8 byte olmalı)
+            if len(key) >= 8:
+                return key[:8]
+            # 8 byte'tan kısa ise hashle
+            return hashlib.md5(key).digest()[:8]
+        elif isinstance(key, str):
+            # String ise hashle
+            if not key:
+                raise ValueError("DES anahtarı boş olamaz")
+            digest = hashlib.md5(key.encode('utf-8')).digest()
+            return digest[:8]
+        else:
+            raise ValueError("DES anahtarı string veya bytes olmalıdır")
 
     @staticmethod
     def _permute(block: int, table: list[int], bits: int) -> int:
@@ -177,6 +189,43 @@ class DESCipher(_SymmetricCipherBase):
         return final.to_bytes(8, 'big')
 
     @classmethod
+    def _derive_iv(cls, iv: str | None = None) -> bytes:
+        """DES için 8 byte IV üretir"""
+        import os
+        import hashlib
+        if iv:
+            digest = hashlib.md5(iv.encode('utf-8')).digest()
+            return digest[:8]  # DES için 8 byte
+        return os.urandom(8)  # DES için 8 byte
+
+    @classmethod
+    def _pkcs7_pad(cls, data: bytes) -> bytes:
+        """DES için 8 byte block size ile padding"""
+        pad_len = 8 - (len(data) % 8)
+        return data + bytes([pad_len] * pad_len)
+
+    @classmethod
+    def _pkcs7_unpad(cls, data: bytes) -> bytes:
+        """DES için 8 byte block size ile unpadding"""
+        if not data:
+            raise ValueError("Boş veri çözülemez")
+        pad_len = data[-1]
+        if pad_len <= 0 or pad_len > 8:  # DES için 8 byte
+            raise ValueError("Geçersiz padding")
+        if data[-pad_len:] != bytes([pad_len] * pad_len):
+            raise ValueError("Padding doğrulaması başarısız")
+        return data[:-pad_len]
+
+    @classmethod
+    def _decode_payload(cls, payload: str):
+        """DES için 8 byte IV okur"""
+        import base64
+        raw = base64.b64decode(payload)
+        if len(raw) < 8:  # DES için 8 byte IV
+            raise ValueError("Şifreli veri geçersiz: IV eksik")
+        return raw[:8], raw[8:]  # İlk 8 byte IV, gerisi ciphertext
+
+    @classmethod
     def encrypt(cls, text: str, key: str, iv: str | None = None) -> str:
         key_bytes = cls._derive_key(key)
         round_keys = cls._generate_round_keys(key_bytes)
@@ -193,7 +242,8 @@ class DESCipher(_SymmetricCipherBase):
             prev = encrypted
 
         ciphertext = b''.join(blocks)
-        return cls._encode_payload(iv_bytes, ciphertext)
+        import base64
+        return base64.b64encode(iv_bytes + ciphertext).decode('utf-8')
 
     @classmethod
     def decrypt(cls, payload: str, key: str, iv: str | None = None) -> str:
@@ -213,6 +263,8 @@ class DESCipher(_SymmetricCipherBase):
         padded = b''.join(blocks)
         plaintext = cls._pkcs7_unpad(padded)
         return plaintext.decode('utf-8')
+
+
 
 
 

@@ -99,7 +99,7 @@ class RSACipher:
         d, n = private_key
         decrypted_int = pow(cipher_int, d, n)
 
-        # Sayıyı byte'a çevir
+        # Sayıyı byte'a çevir - BYTES OLARAK DÖNDÜR (string'e çevirme!)
         byte_len = (decrypted_int.bit_length() + 7) // 8
         decrypted_bytes = decrypted_int.to_bytes(byte_len, 'big')
-        return decrypted_bytes.decode('utf-8')
+        return decrypted_bytes  # BYTES döndür, decode() yapma!

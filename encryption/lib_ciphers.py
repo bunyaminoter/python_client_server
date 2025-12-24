@@ -8,12 +8,19 @@ class LibAESCipher:
     """PyCryptodome kütüphanesi kullanan AES Implementasyonu"""
 
     @staticmethod
-    def _derive_key(key: str) -> bytes:
-        # DEĞİŞİKLİK: Manuel modla uyum için ilk 16 byte (128-bit) alınıyor
-        return hashlib.sha256(key.encode('utf-8')).digest()[:16]
+    def _derive_key(key) -> bytes:
+        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        if isinstance(key, bytes):
+            if len(key) >= 16:
+                return key[:16]
+            return hashlib.sha256(key).digest()[:16]
+        elif isinstance(key, str):
+            return hashlib.sha256(key.encode('utf-8')).digest()[:16]
+        else:
+            raise ValueError("AES anahtarı string veya bytes olmalıdır")
 
     @staticmethod
-    def encrypt(text: str, key: str, iv: str | None = None) -> str:
+    def encrypt(text: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = LibAESCipher._derive_key(key)
         # IV varsa hashle, yoksa kütüphane üretsin (biz burada sabit 16 byte IV üretiyoruz uyum için)
         if iv:
@@ -32,7 +39,7 @@ class LibAESCipher:
         return base64.b64encode(iv_bytes + ciphertext).decode('utf-8')
 
     @staticmethod
-    def decrypt(payload: str, key: str, iv: str | None = None) -> str:
+    def decrypt(payload: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = LibAESCipher._derive_key(key)
         raw = base64.b64decode(payload)
 
@@ -49,12 +56,19 @@ class LibDESCipher:
     """PyCryptodome kütüphanesi kullanan DES Implementasyonu"""
 
     @staticmethod
-    def _derive_key(key: str) -> bytes:
-        # DES için 8 byte anahtar (MD5 ile türetme)
-        return hashlib.md5(key.encode('utf-8')).digest()[:8]
+    def _derive_key(key) -> bytes:
+        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        if isinstance(key, bytes):
+            if len(key) >= 8:
+                return key[:8]
+            return hashlib.md5(key).digest()[:8]
+        elif isinstance(key, str):
+            return hashlib.md5(key.encode('utf-8')).digest()[:8]
+        else:
+            raise ValueError("DES anahtarı string veya bytes olmalıdır")
 
     @staticmethod
-    def encrypt(text: str, key: str, iv: str | None = None) -> str:
+    def encrypt(text: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = LibDESCipher._derive_key(key)
 
         if iv:
@@ -70,7 +84,7 @@ class LibDESCipher:
         return base64.b64encode(iv_bytes + ciphertext).decode('utf-8')
 
     @staticmethod
-    def decrypt(payload: str, key: str, iv: str | None = None) -> str:
+    def decrypt(payload: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = LibDESCipher._derive_key(key)
         raw = base64.b64decode(payload)
 
