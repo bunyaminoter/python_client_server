@@ -41,6 +41,9 @@ class ServerGUI:
         
         # Oturum anahtarı
         self.current_session_key = None
+        
+        # Substitution key saklama (mesajdan geldiğinde)
+        self.saved_substitution_key = ""
 
         # 2. LOGLAMA VE KRİPTOGRAFİK KURULUM (ÖNCE RSA OLUŞTUR)
         self.rsa = RSACipher(key_size=1024)
@@ -393,11 +396,12 @@ class ServerGUI:
         params_frame.pack(fill=tk.X, pady=10)
 
         if method in ["aes", "des"]:
-            # AES/DES anahtarı gösterimi
+            # AES/DES anahtarı girişi
             key_len = 16 if method == "aes" else 8
+            
             key_label = tk.Label(
                 params_frame,
-                text=f"{method.upper()} Oturum Anahtarı ({key_len} byte):",
+                text=f"{method.upper()} Anahtarı ({key_len} karakter):",
                 bg='#ffffff',
                 fg='#2c3e50',
                 font=('Segoe UI', 11),
@@ -405,18 +409,53 @@ class ServerGUI:
             )
             key_label.pack(side=tk.LEFT)
             
-            self.key_var = tk.StringVar(value="(Gelen mesajdan alınır)")
+            self.key_var = tk.StringVar(value="")
             key_entry = tk.Entry(
                 params_frame,
                 textvariable=self.key_var,
-                state="readonly",
                 font=('Consolas', 10),
                 width=50,
                 relief=tk.FLAT,
-                bg='#f8f9fa',
-                fg='#2c3e50'
+                bg='#ffffff',
+                fg='#2c3e50',
+                highlightthickness=1,
+                highlightbackground='#bdc3c7',
+                highlightcolor='#3498db'
             )
             key_entry.pack(side=tk.LEFT, padx=5)
+            
+            # Placeholder text
+            key_entry.insert(0, f"Boş bırakılırsa otomatik üretilir ({key_len} karakter)")
+            key_entry.config(fg='#95a5a6')
+            
+            def on_key_entry_focus_in(event):
+                if key_entry.get() == f"Boş bırakılırsa otomatik üretilir ({key_len} karakter)":
+                    key_entry.delete(0, tk.END)
+                    key_entry.config(fg='#2c3e50')
+            
+            def on_key_entry_focus_out(event):
+                if not key_entry.get().strip():
+                    key_entry.insert(0, f"Boş bırakılırsa otomatik üretilir ({key_len} karakter)")
+                    key_entry.config(fg='#95a5a6')
+            
+            key_entry.bind('<FocusIn>', on_key_entry_focus_in)
+            key_entry.bind('<FocusOut>', on_key_entry_focus_out)
+            
+            # Otomatik üret butonu
+            gen_key_btn = tk.Button(
+                params_frame,
+                text="Otomatik Üret",
+                font=('Segoe UI', 10),
+                bg='#27ae60',
+                fg='#ffffff',
+                activebackground='#229954',
+                relief=tk.FLAT,
+                padx=15,
+                pady=5,
+                cursor='hand2',
+                command=lambda: self.generate_key(method)
+            )
+            gen_key_btn.pack(side=tk.LEFT, padx=5)
             
             # RSA key frame
             if use_rsa:
@@ -613,6 +652,68 @@ class ServerGUI:
             )
             b_entry.pack(side=tk.LEFT, padx=5)
             
+        elif method == "substitution":
+            key_label = tk.Label(
+                params_frame,
+                text="Substitution Key (26 harf):",
+                bg='#ffffff',
+                fg='#2c3e50',
+                font=('Segoe UI', 11),
+                padx=10
+            )
+            key_label.pack(side=tk.LEFT)
+            
+            # Eğer daha önce bir key saklanmışsa onu kullan
+            saved_key = getattr(self, 'saved_substitution_key', "")
+            self.substitution_key_var = tk.StringVar(value=saved_key)
+            key_entry = tk.Entry(
+                params_frame,
+                textvariable=self.substitution_key_var,
+                font=('Consolas', 10),
+                width=30,
+                relief=tk.FLAT,
+                bg='#ffffff',
+                fg='#2c3e50',
+                highlightthickness=1,
+                highlightbackground='#bdc3c7',
+                highlightcolor='#3498db'
+            )
+            key_entry.pack(side=tk.LEFT, padx=5)
+            
+            # Eğer key varsa normal, yoksa placeholder
+            if saved_key:
+                key_entry.config(fg='#2c3e50', state='normal')
+            else:
+                # Placeholder text
+                key_entry.insert(0, "Mesajdan otomatik alınacak")
+                key_entry.config(fg='#95a5a6', state='readonly')
+            
+        elif method == "hill":
+            matrix_label = tk.Label(
+                params_frame,
+                text="Key Matrix (örn: [[3,3],[2,5]]):",
+                bg='#ffffff',
+                fg='#2c3e50',
+                font=('Segoe UI', 11),
+                padx=10
+            )
+            matrix_label.pack(side=tk.LEFT)
+            
+            self.hill_matrix_var = tk.StringVar(value="[[3,3],[2,5]]")
+            matrix_entry = tk.Entry(
+                params_frame,
+                textvariable=self.hill_matrix_var,
+                font=('Consolas', 10),
+                width=30,
+                relief=tk.FLAT,
+                bg='#ffffff',
+                fg='#2c3e50',
+                highlightthickness=1,
+                highlightbackground='#bdc3c7',
+                highlightcolor='#3498db'
+            )
+            matrix_entry.pack(side=tk.LEFT, padx=5)
+            
         elif method == "rail_fence":
             rails_label = tk.Label(
                 params_frame,
@@ -799,13 +900,25 @@ class ServerGUI:
                 decrypt_key_time = perf_counter() - decrypt_key_start
                 
                 key_len = 16 if method == "aes" else 8
-                if len(session_key_bytes) > key_len:
-                    session_key_bytes = session_key_bytes[:key_len]
-                elif len(session_key_bytes) < key_len:
-                    session_key_bytes = session_key_bytes + b'\x00' * (key_len - len(session_key_bytes))
+                # Bytes'ı string'e çevir
+                try:
+                    session_key_str = session_key_bytes.decode('utf-8', errors='ignore')
+                    if len(session_key_str) != key_len:
+                        if len(session_key_str) > key_len:
+                            session_key_str = session_key_str[:key_len]
+                        else:
+                            import string
+                            import random
+                            session_key_str = session_key_str + ''.join(random.choices(string.ascii_letters + string.digits, k=key_len - len(session_key_str)))
+                    session_key_bytes = session_key_str.encode('utf-8')
+                except:
+                    import string
+                    import random
+                    session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                    session_key_bytes = session_key_str.encode('utf-8')
                 
-                self.log_gui(f"RSA ile şifrelenmiş anahtar çözüldü ({decrypt_key_time*1000:.2f} ms, {len(session_key_bytes)} byte)")
-            elif use_ecc and 'ecc_public_key' in data:
+                self.log_gui(f"RSA ile şifrelenmiş anahtar çözüldü ({decrypt_key_time*1000:.2f} ms, {len(session_key_str)} karakter)")
+            elif use_ecc and 'ecc_public_key' in data and 'encrypted_key' in data:
                 use_lib = (impl_mode == 'library')
                 if use_lib:
                     self.log_gui("HATA: ECC sadece manuel şifreleme modunda kullanılabilir!")
@@ -813,49 +926,145 @@ class ServerGUI:
                 
                 client_ecc_pub = tuple(data['ecc_public_key'])
                 self.log_gui(f"İstemciden ECC Public Key alındı: {client_ecc_pub}")
+                
+                # ECC ile şifrelenmiş key'i çöz
                 key_len = 16 if method == "aes" else 8
                 
                 ecc_start = perf_counter()
                 shared_secret = self.server_ecc.generate_shared_secret(client_ecc_pub)
                 ecc_time = perf_counter() - ecc_start
                 
-                session_key_bytes = shared_secret[:key_len]
-                self.log_gui(f"ECC ile shared secret üretildi ({ecc_time*1000:.2f} ms, {len(session_key_bytes)} byte)")
+                # Şifrelenmiş key'i hex'den bytes'a çevir
+                encrypted_key_hex = data['encrypted_key']
+                encrypted_key_bytes = bytes.fromhex(encrypted_key_hex)
+                
+                # ECC shared secret ile XOR yaparak çöz
+                ecc_key = shared_secret[:len(encrypted_key_bytes)]
+                session_key_bytes = bytes(a ^ b for a, b in zip(encrypted_key_bytes, ecc_key))
+                
+                # Key uzunluğunu kontrol et
+                if len(session_key_bytes) != key_len:
+                    self.log_gui(f"UYARI: Key uzunluğu beklenen ({key_len}) ile uyuşmuyor ({len(session_key_bytes)}). Düzeltiliyor...")
+                    if len(session_key_bytes) > key_len:
+                        session_key_bytes = session_key_bytes[:key_len]
+                    else:
+                        session_key_bytes = session_key_bytes + b'\x00' * (key_len - len(session_key_bytes))
+                
+                self.log_gui(f"ECC ile şifrelenmiş anahtar çözüldü ({ecc_time*1000:.2f} ms, {len(session_key_bytes)} byte)")
             elif 'session_key' in data:
-                import base64
-                try:
-                    session_key_bytes = base64.b64decode(data['session_key'])
-                    self.log_gui(f"Oturum anahtarı alındı (RSA olmadan, {len(session_key_bytes)} byte)")
-                except Exception as e:
-                    self.log_gui(f"HATA: Oturum anahtarı decode edilemedi: {e}")
+                # Artık session_key direkt string olarak geliyor
+                session_key_str = data['session_key']
+                if isinstance(session_key_str, str):
+                    key_len = 16 if method == "aes" else 8
+                    if len(session_key_str) != key_len:
+                        self.log_gui(f"UYARI: Anahtar uzunluğu beklenen ({key_len}) ile uyuşmuyor ({len(session_key_str)}). Düzeltiliyor...")
+                        if len(session_key_str) > key_len:
+                            session_key_str = session_key_str[:key_len]
+                        else:
+                            import string
+                            import random
+                            session_key_str = session_key_str + ''.join(random.choices(string.ascii_letters + string.digits, k=key_len - len(session_key_str)))
+                    session_key_bytes = session_key_str.encode('utf-8')
+                    self.log_gui(f"Oturum anahtarı alındı (RSA olmadan, {len(session_key_str)} karakter)")
+                else:
+                    self.log_gui(f"HATA: Oturum anahtarı string formatında değil!")
                     return
             elif self.current_session_key:
-                session_key_bytes = self.current_session_key
-                self.log_gui("Önceki oturum anahtarı kullanılıyor")
+                # Mevcut key'i string'e çevir
+                try:
+                    session_key_str = self.current_session_key.decode('utf-8', errors='ignore')
+                    key_len = 16 if method == "aes" else 8
+                    if len(session_key_str) != key_len:
+                        import string
+                        import random
+                        session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                    session_key_bytes = self.current_session_key
+                    self.log_gui("Önceki oturum anahtarı kullanılıyor")
+                except:
+                    import string
+                    import random
+                    key_len = 16 if method == "aes" else 8
+                    session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                    session_key_bytes = session_key_str.encode('utf-8')
             elif 'key' in params:
+                # Params'tan key al
                 if isinstance(params['key'], str):
-                    session_key_bytes = params['key'].encode('utf-8')
+                    session_key_str = params['key']
+                    session_key_bytes = session_key_str.encode('utf-8')
                 else:
                     session_key_bytes = params['key']
+                    try:
+                        session_key_str = session_key_bytes.decode('utf-8', errors='ignore')
+                    except:
+                        import string
+                        import random
+                        key_len = 16 if method == "aes" else 8
+                        session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        session_key_bytes = session_key_str.encode('utf-8')
                 self.log_gui("Params'tan anahtar alındı")
             else:
                 self.log_gui("HATA: Oturum anahtarı bulunamadı!")
                 return
             
             key_len = 16 if method == "aes" else 8
-            if len(session_key_bytes) != key_len:
-                self.log_gui(f"UYARI: Anahtar uzunluğu beklenen ({key_len}) ile uyuşmuyor ({len(session_key_bytes)}). Düzeltiliyor...")
-                if len(session_key_bytes) > key_len:
-                    session_key_bytes = session_key_bytes[:key_len]
+            
+            # ECC kullanılıyorsa da key'i string'e çevir (ECC sadece key exchange için, key normal AES/DES key'i)
+            if use_ecc:
+                # ECC ile çözülen key'i string'e çevir
+                if isinstance(session_key_bytes, bytes):
+                    try:
+                        session_key_str = session_key_bytes.decode('utf-8', errors='ignore')
+                        if len(session_key_str) != key_len:
+                            self.log_gui(f"UYARI: Anahtar uzunluğu beklenen ({key_len}) ile uyuşmuyor ({len(session_key_str)}). Düzeltiliyor...")
+                            if len(session_key_str) > key_len:
+                                session_key_str = session_key_str[:key_len]
+                            else:
+                                import string
+                                import random
+                                session_key_str = session_key_str + ''.join(random.choices(string.ascii_letters + string.digits, k=key_len - len(session_key_str)))
+                            session_key_bytes = session_key_str.encode('utf-8')
+                    except:
+                        import string
+                        import random
+                        session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        session_key_bytes = session_key_str.encode('utf-8')
                 else:
-                    session_key_bytes = session_key_bytes + b'\x00' * (key_len - len(session_key_bytes))
-
-            if session_key_bytes:
-                self.current_session_key = session_key_bytes
-                params['key'] = session_key_bytes
+                    session_key_str = session_key_bytes
+                
+                if session_key_str:
+                    self.current_session_key = session_key_bytes if isinstance(session_key_bytes, bytes) else session_key_str.encode('utf-8')
+                    params['key'] = session_key_str
+                else:
+                    self.log_gui("HATA: session_key None!")
+                    return
             else:
-                self.log_gui("HATA: session_key_bytes None!")
-                return
+                # Diğer durumlarda string formatına çevir
+                if isinstance(session_key_bytes, bytes):
+                    try:
+                        session_key_str = session_key_bytes.decode('utf-8', errors='ignore')
+                        if len(session_key_str) != key_len:
+                            self.log_gui(f"UYARI: Anahtar uzunluğu beklenen ({key_len}) ile uyuşmuyor ({len(session_key_str)}). Düzeltiliyor...")
+                            if len(session_key_str) > key_len:
+                                session_key_str = session_key_str[:key_len]
+                            else:
+                                import string
+                                import random
+                                session_key_str = session_key_str + ''.join(random.choices(string.ascii_letters + string.digits, k=key_len - len(session_key_str)))
+                            session_key_bytes = session_key_str.encode('utf-8')
+                    except:
+                        import string
+                        import random
+                        session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        session_key_bytes = session_key_str.encode('utf-8')
+                else:
+                    session_key_str = session_key_bytes
+
+                if session_key_str:
+                    self.current_session_key = session_key_bytes if isinstance(session_key_bytes, bytes) else session_key_str.encode('utf-8')
+                    params['key'] = session_key_str
+                else:
+                    self.log_gui("HATA: session_key None!")
+                    return
 
             # UI güncelle
             combo_val = method.upper()
@@ -885,19 +1094,58 @@ class ServerGUI:
                 if method_id in self.method_buttons:
                     self.select_method(method_id)
                 if hasattr(self, 'key_var'): 
-                    self.key_var.set(session_key_bytes.hex())
+                    # Key'i UI'da göster, ama sadece eğer boşsa
+                    current_key = self.key_var.get().strip()
+                    if not current_key or current_key.startswith("Boş bırakılırsa"):
+                        # Key'i string olarak göster (ECC sadece key exchange için, key normal AES/DES key'i)
+                        session_key_display = session_key_str if 'session_key_str' in locals() else (session_key_bytes.decode('utf-8', errors='ignore') if isinstance(session_key_bytes, bytes) else str(session_key_bytes))
+                        self.key_var.set(session_key_display)
+                        # Entry widget'ı bul ve rengi düzelt
+                        for widget in self.params_container.winfo_children():
+                            if isinstance(widget, tk.Frame):
+                                for child in widget.winfo_children():
+                                    if isinstance(child, tk.Entry) and child.cget('textvariable') == str(self.key_var):
+                                        child.config(fg='#2c3e50')
+                                        break
 
             self.root.after(0, update_ui_safe)
         else:
             def update_ui_safe():
                 if method in self.method_buttons:
                     self.select_method(method)
+                
+                # Substitution için key kontrolü ve UI güncelleme
+                if method == "substitution" and 'key' in params:
+                    # Key'i instance variable'da sakla
+                    self.saved_substitution_key = params['key']
+                    # UI'ı yeniden oluştur (key ile birlikte)
+                    if method in self.method_buttons:
+                        self.select_method(method)
+                
+                # Hill için key_matrix kontrolü ve UI güncelleme
+                if method == "hill" and 'key_matrix' in params:
+                    if hasattr(self, 'hill_matrix_var'):
+                        self.hill_matrix_var.set(str(params['key_matrix']))
+                
+                # Affine için a ve b UI güncelleme
+                if method == "affine":
+                    if 'a' in params and hasattr(self, 'aff_a'):
+                        self.aff_a.set(str(params['a']))
+                    if 'b' in params and hasattr(self, 'aff_b'):
+                        self.aff_b.set(str(params['b']))
 
             self.root.after(0, update_ui_safe)
 
         # 3. Mesajı Çöz
         try:
             use_lib = (impl_mode == 'library')
+            
+            # Substitution için key kontrolü
+            if method == "substitution":
+                if 'key' not in params:
+                    self.log_gui("HATA: Substitution cipher için key gerekli!")
+                    return
+            
             decrypt_start = perf_counter()
             
             if method in ['aes', 'des']:
@@ -915,7 +1163,8 @@ class ServerGUI:
                     mode_display += " + RSA"
                 elif use_ecc:
                     mode_display += " + ECC"
-                session_key_display = session_key_bytes.hex() if 'session_key_bytes' in locals() else "Yok"
+                # Key'i string olarak göster (ECC sadece key exchange için)
+                session_key_display = session_key_str if 'session_key_str' in locals() else (session_key_bytes.decode('utf-8', errors='ignore') if 'session_key_bytes' in locals() and isinstance(session_key_bytes, bytes) else "Yok")
             else:
                 mode_display = method
                 session_key_display = "-"
@@ -945,6 +1194,46 @@ class ServerGUI:
             self.log_gui("ECC Private Key otomatik dolduruldu.")
         else:
             self.log_gui("ECC Private Key bulunamadı.")
+    
+    def generate_key(self, method):
+        """AES veya DES için otomatik key üretir"""
+        key_len = 16 if method == "aes" else 8
+        # Rastgele karakterlerden oluşan string üret
+        import string
+        import random
+        key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+        
+        if hasattr(self, 'key_var'):
+            self.key_var.set(key_string)
+            # Entry widget'ı bul ve rengi düzelt
+            for widget in self.params_container.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, tk.Entry) and child.cget('textvariable') == str(self.key_var):
+                            child.config(fg='#2c3e50')
+                            break
+    
+    def get_aes_des_key(self, method):
+        """AES veya DES key'ini UI'dan alır veya otomatik üretir"""
+        key_len = 16 if method == "aes" else 8
+        
+        if hasattr(self, 'key_var'):
+            key_text = self.key_var.get().strip()
+            # Placeholder text kontrolü
+            if key_text and not key_text.startswith("Boş bırakılırsa"):
+                if len(key_text) != key_len:
+                    self.log_gui(f"HATA: {method.upper()} anahtarı tam olarak {key_len} karakter olmalıdır!")
+                    return None
+                # String'i direkt kullan (bytes'a çevirme, _derive_key yapacak)
+                return key_text
+        
+        # Key girilmemişse otomatik üret
+        import string
+        import random
+        key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+        if hasattr(self, 'key_var'):
+            self.key_var.set(key_string)
+        return key_string
     
     def get_rsa_private_key(self, require_manual=False):
         """RSA private key'i alır"""
@@ -988,6 +1277,27 @@ class ServerGUI:
                 params["rails"] = int(self.rails_var.get())
             elif method == "columnar_transposition" and hasattr(self, 'col_key_var'):
                 params["key"] = self.col_key_var.get()
+            elif method == "substitution":
+                # Önce params'tan key'i al (eğer varsa - mesajdan geldiyse)
+                # Eğer params'ta yoksa UI'dan al
+                if 'key' not in params and hasattr(self, 'substitution_key_var'):
+                    key = self.substitution_key_var.get().strip()
+                    # Placeholder text kontrolü
+                    if key and not key.startswith("Mesajdan otomatik"):
+                        params["key"] = key.upper()
+                elif 'key' not in params:
+                    # Key yoksa hata
+                    messagebox.showerror("Hata", "Substitution cipher için key gerekli!")
+                    return
+            elif method == "hill" and hasattr(self, 'hill_matrix_var'):
+                matrix_str = self.hill_matrix_var.get().strip()
+                if matrix_str:
+                    try:
+                        # String'i list'e çevir
+                        import ast
+                        params["key_matrix"] = ast.literal_eval(matrix_str)
+                    except:
+                        pass  # Varsayılan matrix kullanılacak
         except (ValueError, AttributeError):
             pass
         return params
@@ -1012,11 +1322,49 @@ class ServerGUI:
         try:
             # AES/DES için oturum anahtarı kontrolü
             if method in ["aes", "des"]:
-                key_bytes = self.current_session_key
-                if not key_bytes:
-                    messagebox.showerror("Hata", "Oturum anahtarı bulunamadı. İstemciden mesaj bekleyin.")
-                    return
-                params["key"] = key_bytes
+                # Önce UI'dan key al, yoksa current_session_key kullan, o da yoksa otomatik üret
+                key_string = None
+                
+                # 1. UI'dan key al
+                if hasattr(self, 'key_var'):
+                    key_text = self.key_var.get().strip()
+                    if key_text and not key_text.startswith("Boş bırakılırsa"):
+                        key_len = 16 if method == "aes" else 8
+                        if len(key_text) != key_len:
+                            messagebox.showerror("Hata", f"{method.upper()} anahtarı tam olarak {key_len} karakter olmalıdır!")
+                            return
+                        key_string = key_text
+                
+                # 2. UI'da key yoksa, current_session_key kullan
+                if key_string is None and self.current_session_key:
+                    try:
+                        key_string = self.current_session_key.decode('utf-8', errors='ignore')
+                        key_len = 16 if method == "aes" else 8
+                        if len(key_string) != key_len:
+                            import string
+                            import random
+                            key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        if hasattr(self, 'key_var'):
+                            self.key_var.set(key_string)
+                    except:
+                        import string
+                        import random
+                        key_len = 16 if method == "aes" else 8
+                        key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        if hasattr(self, 'key_var'):
+                            self.key_var.set(key_string)
+                
+                # 3. Hiçbiri yoksa otomatik üret
+                if key_string is None:
+                    key_len = 16 if method == "aes" else 8
+                    import string
+                    import random
+                    key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                    if hasattr(self, 'key_var'):
+                        self.key_var.set(key_string)
+                
+                params["key"] = key_string
+                self.current_session_key = key_string.encode('utf-8')
             else:
                 params = self.get_ui_params()
 
@@ -1030,7 +1378,7 @@ class ServerGUI:
                 enc_msg = msg
             encrypt_time = perf_counter() - encrypt_start
 
-            # GÜVENLİK: Anahtarı pakete koyma
+            # GÜVENLİK: AES/DES anahtarlarını pakete koyma (Substitution, Hill vb. için key gönderilmeli)
             payload_params = params.copy()
             if method in ["aes", "des"] and 'key' in payload_params:
                 del payload_params['key']
@@ -1055,7 +1403,7 @@ class ServerGUI:
                     disp_method += " + RSA"
                 elif use_ecc:
                     disp_method += " + ECC"
-                key_display = key_bytes.hex() if 'key_bytes' in locals() else "-"
+                key_display = key_string if 'key_string' in locals() else "-"
             else:
                 disp_method = method
                 key_display = "-"

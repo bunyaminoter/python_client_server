@@ -119,21 +119,22 @@ class DESCipher(_SymmetricCipherBase):
 
     @staticmethod
     def _derive_key(key) -> bytes:
-        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        """Key'i bytes'a çevirir. String (8 karakter) veya bytes kabul eder. Byte kontrolü yapar."""
         if isinstance(key, bytes):
-            # Zaten bytes, direkt kullan (8 byte olmalı)
-            if len(key) >= 8:
-                return key[:8]
-            # 8 byte'tan kısa ise hashle
-            return hashlib.md5(key).digest()[:8]
+            # Zaten bytes, byte kontrolü yap
+            if len(key) != 8:
+                raise ValueError(f"DES anahtarı tam olarak 8 byte olmalıdır, {len(key)} byte sağlandı")
+            return key
         elif isinstance(key, str):
-            # String ise hashle
+            # String ise 8 karakter olmalı
             if not key:
                 raise ValueError("DES anahtarı boş olamaz")
-            digest = hashlib.md5(key.encode('utf-8')).digest()
-            return digest[:8]
+            if len(key) != 8:
+                raise ValueError(f"DES anahtarı tam olarak 8 karakter olmalıdır, {len(key)} karakter sağlandı")
+            # String'i bytes'a çevir
+            return key.encode('utf-8')
         else:
-            raise ValueError("DES anahtarı string veya bytes olmalıdır")
+            raise ValueError("DES anahtarı string (8 karakter) veya bytes olmalıdır")
 
     @staticmethod
     def _permute(block: int, table: list[int], bits: int) -> int:
@@ -226,7 +227,7 @@ class DESCipher(_SymmetricCipherBase):
         return raw[:8], raw[8:]  # İlk 8 byte IV, gerisi ciphertext
 
     @classmethod
-    def encrypt(cls, text: str, key: str, iv: str | None = None) -> str:
+    def encrypt(cls, text: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = cls._derive_key(key)
         round_keys = cls._generate_round_keys(key_bytes)
         iv_bytes = cls._derive_iv(iv)
@@ -246,7 +247,7 @@ class DESCipher(_SymmetricCipherBase):
         return base64.b64encode(iv_bytes + ciphertext).decode('utf-8')
 
     @classmethod
-    def decrypt(cls, payload: str, key: str, iv: str | None = None) -> str:
+    def decrypt(cls, payload: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = cls._derive_key(key)
         round_keys = cls._generate_round_keys(key_bytes)
         iv_bytes, ciphertext = cls._decode_payload(payload)

@@ -9,15 +9,22 @@ class LibAESCipher:
 
     @staticmethod
     def _derive_key(key) -> bytes:
-        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        """Key'i bytes'a çevirir. String (16 karakter) veya bytes kabul eder. Byte kontrolü yapar."""
         if isinstance(key, bytes):
-            if len(key) >= 16:
-                return key[:16]
-            return hashlib.sha256(key).digest()[:16]
+            # Zaten bytes, byte kontrolü yap
+            if len(key) != 16:
+                raise ValueError(f"AES anahtarı tam olarak 16 byte olmalıdır, {len(key)} byte sağlandı")
+            return key
         elif isinstance(key, str):
-            return hashlib.sha256(key.encode('utf-8')).digest()[:16]
+            # String ise 16 karakter olmalı
+            if not key:
+                raise ValueError("AES anahtarı boş olamaz")
+            if len(key) != 16:
+                raise ValueError(f"AES anahtarı tam olarak 16 karakter olmalıdır, {len(key)} karakter sağlandı")
+            # String'i bytes'a çevir
+            return key.encode('utf-8')
         else:
-            raise ValueError("AES anahtarı string veya bytes olmalıdır")
+            raise ValueError("AES anahtarı string (16 karakter) veya bytes olmalıdır")
 
     @staticmethod
     def encrypt(text: str, key: str | bytes, iv: str | None = None) -> str:
@@ -57,15 +64,22 @@ class LibDESCipher:
 
     @staticmethod
     def _derive_key(key) -> bytes:
-        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        """Key'i bytes'a çevirir. String (8 karakter) veya bytes kabul eder. Byte kontrolü yapar."""
         if isinstance(key, bytes):
-            if len(key) >= 8:
-                return key[:8]
-            return hashlib.md5(key).digest()[:8]
+            # Zaten bytes, byte kontrolü yap
+            if len(key) != 8:
+                raise ValueError(f"DES anahtarı tam olarak 8 byte olmalıdır, {len(key)} byte sağlandı")
+            return key
         elif isinstance(key, str):
-            return hashlib.md5(key.encode('utf-8')).digest()[:8]
+            # String ise 8 karakter olmalı
+            if not key:
+                raise ValueError("DES anahtarı boş olamaz")
+            if len(key) != 8:
+                raise ValueError(f"DES anahtarı tam olarak 8 karakter olmalıdır, {len(key)} karakter sağlandı")
+            # String'i bytes'a çevir
+            return key.encode('utf-8')
         else:
-            raise ValueError("DES anahtarı string veya bytes olmalıdır")
+            raise ValueError("DES anahtarı string (8 karakter) veya bytes olmalıdır")
 
     @staticmethod
     def encrypt(text: str, key: str | bytes, iv: str | None = None) -> str:

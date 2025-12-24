@@ -372,11 +372,12 @@ class ClientGUI:
         params_frame.pack(fill=tk.X, pady=10)
 
         if method in ["aes", "des"]:
-            # AES/DES anahtarı gösterimi
+            # AES/DES anahtarı girişi
             key_len = 16 if method == "aes" else 8
+            
             key_label = tk.Label(
                 params_frame,
-                text=f"{method.upper()} Oturum Anahtarı ({key_len} byte):",
+                text=f"{method.upper()} Anahtarı ({key_len} karakter):",
                 bg='#ffffff',
                 fg='#2c3e50',
                 font=('Segoe UI', 11),
@@ -384,18 +385,53 @@ class ClientGUI:
             )
             key_label.pack(side=tk.LEFT)
             
-            self.key_entry_var = tk.StringVar(value="(Otomatik Üretilecek)")
+            self.key_entry_var = tk.StringVar(value="")
             key_entry = tk.Entry(
                 params_frame,
                 textvariable=self.key_entry_var,
-                state="readonly",
                 font=('Consolas', 10),
                 width=50,
                 relief=tk.FLAT,
-                bg='#f8f9fa',
-                fg='#2c3e50'
+                bg='#ffffff',
+                fg='#2c3e50',
+                highlightthickness=1,
+                highlightbackground='#bdc3c7',
+                highlightcolor='#3498db'
             )
             key_entry.pack(side=tk.LEFT, padx=5)
+            
+            # Placeholder text
+            key_entry.insert(0, f"Boş bırakılırsa otomatik üretilir ({key_len} karakter)")
+            key_entry.config(fg='#95a5a6')
+            
+            def on_key_entry_focus_in(event):
+                if key_entry.get() == f"Boş bırakılırsa otomatik üretilir ({key_len} karakter)":
+                    key_entry.delete(0, tk.END)
+                    key_entry.config(fg='#2c3e50')
+            
+            def on_key_entry_focus_out(event):
+                if not key_entry.get().strip():
+                    key_entry.insert(0, f"Boş bırakılırsa otomatik üretilir ({key_len} karakter)")
+                    key_entry.config(fg='#95a5a6')
+            
+            key_entry.bind('<FocusIn>', on_key_entry_focus_in)
+            key_entry.bind('<FocusOut>', on_key_entry_focus_out)
+            
+            # Otomatik üret butonu
+            gen_key_btn = tk.Button(
+                params_frame,
+                text="Otomatik Üret",
+                font=('Segoe UI', 10),
+                bg='#27ae60',
+                fg='#ffffff',
+                activebackground='#229954',
+                relief=tk.FLAT,
+                padx=15,
+                pady=5,
+                cursor='hand2',
+                command=lambda: self.generate_key(method)
+            )
+            gen_key_btn.pack(side=tk.LEFT, padx=5)
             
             # RSA key frame
             if use_rsa:
@@ -592,6 +628,91 @@ class ClientGUI:
             )
             b_entry.pack(side=tk.LEFT, padx=5)
             
+        elif method == "substitution":
+            key_label = tk.Label(
+                params_frame,
+                text="Substitution Key (26 harf):",
+                bg='#ffffff',
+                fg='#2c3e50',
+                font=('Segoe UI', 11),
+                padx=10
+            )
+            key_label.pack(side=tk.LEFT)
+            
+            self.substitution_key_var = tk.StringVar(value="")
+            key_entry = tk.Entry(
+                params_frame,
+                textvariable=self.substitution_key_var,
+                font=('Consolas', 10),
+                width=30,
+                relief=tk.FLAT,
+                bg='#ffffff',
+                fg='#2c3e50',
+                highlightthickness=1,
+                highlightbackground='#bdc3c7',
+                highlightcolor='#3498db'
+            )
+            key_entry.pack(side=tk.LEFT, padx=5)
+            
+            # Placeholder text
+            key_entry.insert(0, "Boş bırakılırsa otomatik üretilir (26 harf)")
+            key_entry.config(fg='#95a5a6')
+            
+            def on_sub_key_entry_focus_in(event):
+                if key_entry.get() == "Boş bırakılırsa otomatik üretilir (26 harf)":
+                    key_entry.delete(0, tk.END)
+                    key_entry.config(fg='#2c3e50')
+            
+            def on_sub_key_entry_focus_out(event):
+                if not key_entry.get().strip():
+                    key_entry.insert(0, "Boş bırakılırsa otomatik üretilir (26 harf)")
+                    key_entry.config(fg='#95a5a6')
+            
+            key_entry.bind('<FocusIn>', on_sub_key_entry_focus_in)
+            key_entry.bind('<FocusOut>', on_sub_key_entry_focus_out)
+            
+            # Otomatik üret butonu
+            gen_sub_key_btn = tk.Button(
+                params_frame,
+                text="Otomatik Üret",
+                font=('Segoe UI', 10),
+                bg='#27ae60',
+                fg='#ffffff',
+                activebackground='#229954',
+                relief=tk.FLAT,
+                padx=15,
+                pady=5,
+                cursor='hand2',
+                command=lambda: self.generate_substitution_key()
+            )
+            gen_sub_key_btn.pack(side=tk.LEFT, padx=5)
+            
+        elif method == "hill":
+            matrix_label = tk.Label(
+                params_frame,
+                text="Key Matrix (örn: [[3,3],[2,5]]):",
+                bg='#ffffff',
+                fg='#2c3e50',
+                font=('Segoe UI', 11),
+                padx=10
+            )
+            matrix_label.pack(side=tk.LEFT)
+            
+            self.hill_matrix_var = tk.StringVar(value="[[3,3],[2,5]]")
+            matrix_entry = tk.Entry(
+                params_frame,
+                textvariable=self.hill_matrix_var,
+                font=('Consolas', 10),
+                width=30,
+                relief=tk.FLAT,
+                bg='#ffffff',
+                fg='#2c3e50',
+                highlightthickness=1,
+                highlightbackground='#bdc3c7',
+                highlightcolor='#3498db'
+            )
+            matrix_entry.pack(side=tk.LEFT, padx=5)
+            
         elif method == "rail_fence":
             rails_label = tk.Label(
                 params_frame,
@@ -666,6 +787,64 @@ class ClientGUI:
         else:
             messagebox.showerror("Hata", "Sunucuya bağlı değil veya ECC public key alınamadı.")
     
+    def generate_key(self, method):
+        """AES veya DES için otomatik key üretir"""
+        key_len = 16 if method == "aes" else 8
+        # Rastgele karakterlerden oluşan string üret
+        import string
+        import random
+        key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+        
+        if hasattr(self, 'key_entry_var'):
+            self.key_entry_var.set(key_string)
+            # Entry widget'ı bul ve rengi düzelt
+            for widget in self.params_container.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, tk.Entry) and child.cget('textvariable') == str(self.key_entry_var):
+                            child.config(fg='#2c3e50')
+                            break
+    
+    def generate_substitution_key(self):
+        """Substitution için otomatik key üretir (26 harf)"""
+        import string
+        import random
+        chars = list(string.ascii_uppercase)
+        random.shuffle(chars)
+        key_string = ''.join(chars)
+        
+        if hasattr(self, 'substitution_key_var'):
+            self.substitution_key_var.set(key_string)
+            # Entry widget'ı bul ve rengi düzelt
+            for widget in self.params_container.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, tk.Entry) and child.cget('textvariable') == str(self.substitution_key_var):
+                            child.config(fg='#2c3e50')
+                            break
+    
+    def get_aes_des_key(self, method):
+        """AES veya DES key'ini UI'dan alır veya otomatik üretir"""
+        key_len = 16 if method == "aes" else 8
+        
+        if hasattr(self, 'key_entry_var'):
+            key_text = self.key_entry_var.get().strip()
+            # Placeholder text kontrolü
+            if key_text and not key_text.startswith("Boş bırakılırsa"):
+                if len(key_text) != key_len:
+                    messagebox.showerror("Hata", f"{method.upper()} anahtarı tam olarak {key_len} karakter olmalıdır!")
+                    return None
+                # String'i direkt kullan (bytes'a çevirme, _derive_key yapacak)
+                return key_text
+        
+        # Key girilmemişse otomatik üret
+        import string
+        import random
+        key_string = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+        if hasattr(self, 'key_entry_var'):
+            self.key_entry_var.set(key_string)
+        return key_string
+    
     def get_rsa_public_key(self, require_manual=False):
         """RSA public key'i alır"""
         if not hasattr(self, 'rsa_pub_key_entry'):
@@ -692,20 +871,32 @@ class ClientGUI:
         return None
     
     def get_ecc_public_key(self, require_manual=False):
-        """ECC public key'i alır"""
+        """ECC public key'i alır. String formatını parse eder: (x, y), x, y, veya tuple."""
         if not hasattr(self, 'ecc_pub_key_entry'):
             return None
             
         key_text = self.ecc_pub_key_entry.get().strip()
         if key_text:
             try:
-                key_text = key_text.strip('()')
-                parts = key_text.split(',')
+                # Farklı formatları kabul et: "(x, y)", "x, y", veya tuple string
+                # Parantezleri temizle
+                key_text = key_text.strip('()[]{}')
+                
+                # Virgülle ayır
+                parts = [p.strip() for p in key_text.split(',')]
                 if len(parts) == 2:
                     x = int(parts[0].strip())
                     y = int(parts[1].strip())
                     return (x, y)
-            except (ValueError, AttributeError):
+                elif len(parts) == 1:
+                    # Tek sayı varsa, boşlukla ayırmayı dene
+                    parts = key_text.split()
+                    if len(parts) == 2:
+                        x = int(parts[0])
+                        y = int(parts[1])
+                        return (x, y)
+            except (ValueError, AttributeError) as e:
+                # Parse hatası - kullanıcıya bilgi ver
                 pass
         
         if require_manual:
@@ -735,6 +926,20 @@ class ClientGUI:
                 params["rails"] = int(self.rails_var.get())
             elif method == "columnar_transposition" and hasattr(self, 'col_key_var'):
                 params["key"] = self.col_key_var.get()
+            elif method == "substitution" and hasattr(self, 'substitution_key_var'):
+                key = self.substitution_key_var.get().strip()
+                # Placeholder text kontrolü
+                if key and not key.startswith("Boş bırakılırsa"):
+                    params["key"] = key.upper()
+            elif method == "hill" and hasattr(self, 'hill_matrix_var'):
+                matrix_str = self.hill_matrix_var.get().strip()
+                if matrix_str:
+                    try:
+                        # String'i list'e çevir
+                        import ast
+                        params["key_matrix"] = ast.literal_eval(matrix_str)
+                    except:
+                        pass  # Varsayılan matrix kullanılacak
         except (ValueError, AttributeError):
             pass
         return params
@@ -827,22 +1032,59 @@ class ClientGUI:
 
                 # AES/DES için oturum anahtarını al
                 if method in ["aes", "des"]:
-                    if use_ecc and 'ecc_public_key' in msg_data:
+                    if use_ecc and 'ecc_public_key' in msg_data and 'encrypted_key' in msg_data:
                         ecc_pub_key = tuple(msg_data['ecc_public_key'])
                         key_len = 16 if method == "aes" else 8
                         
                         if self.client_ecc:
+                            # ECC ile şifrelenmiş key'i çöz
                             shared_secret = self.client_ecc.generate_shared_secret(ecc_pub_key)
-                            session_key_bytes = shared_secret[:key_len]
+                            
+                            # Şifrelenmiş key'i hex'den bytes'a çevir
+                            encrypted_key_hex = msg_data['encrypted_key']
+                            encrypted_key_bytes = bytes.fromhex(encrypted_key_hex)
+                            
+                            # ECC shared secret ile XOR yaparak çöz
+                            ecc_key = shared_secret[:len(encrypted_key_bytes)]
+                            session_key_bytes = bytes(a ^ b for a, b in zip(encrypted_key_bytes, ecc_key))
+                            
+                            # Key'i string'e çevir
+                            try:
+                                session_key_str = session_key_bytes.decode('utf-8', errors='ignore')
+                                if len(session_key_str) != key_len:
+                                    import string
+                                    import random
+                                    if len(session_key_str) > key_len:
+                                        session_key_str = session_key_str[:key_len]
+                                    else:
+                                        session_key_str = session_key_str + ''.join(random.choices(string.ascii_letters + string.digits, k=key_len - len(session_key_str)))
+                            except:
+                                import string
+                                import random
+                                session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                            
                             self.current_session_key = session_key_bytes
-                            params['key'] = session_key_bytes
-                            session_key = session_key_bytes.hex()
+                            params['key'] = session_key_str
+                            session_key = session_key_str
                         else:
                             session_key = "ECC Key bulunamadı"
                     elif self.current_session_key:
                         session_key_bytes = self.current_session_key
-                        params['key'] = session_key_bytes
-                        session_key = session_key_bytes.hex()
+                        # Bytes'ı string'e çevir
+                        try:
+                            session_key_str = session_key_bytes.decode('utf-8', errors='ignore')
+                            key_len = 16 if method == "aes" else 8
+                            if len(session_key_str) != key_len:
+                                import string
+                                import random
+                                session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        except:
+                            import string
+                            import random
+                            key_len = 16 if method == "aes" else 8
+                            session_key_str = ''.join(random.choices(string.ascii_letters + string.digits, k=key_len))
+                        params['key'] = session_key_str
+                        session_key = session_key_str
                     else:
                         session_key = "Bilinmiyor"
 
@@ -906,7 +1148,25 @@ class ClientGUI:
         try:
             # AES veya DES şifreleme
             if method in ["aes", "des"]:
+                # key_len'i method'a göre doğru hesapla: AES=16 byte, DES=8 byte
                 key_len = 16 if method == "aes" else 8
+                # Debug: method ve key_len değerlerini kontrol et
+                if method not in ["aes", "des"]:
+                    messagebox.showerror("Hata", f"Bilinmeyen method: {method}")
+                    return
+                
+                # Key'i UI'dan al veya otomatik üret
+                session_key = self.get_aes_des_key(method)
+                if session_key is None:
+                    return  # Hata mesajı zaten gösterildi
+                
+                # Key'i bytes olarak sakla (string ise encode edilir)
+                if isinstance(session_key, str):
+                    session_key_bytes = session_key.encode('utf-8')
+                else:
+                    session_key_bytes = session_key
+                
+                self.current_session_key = session_key_bytes
                 
                 if use_rsa:
                     rsa_pub_key = self.get_rsa_public_key(require_manual=True)
@@ -914,11 +1174,11 @@ class ClientGUI:
                         messagebox.showerror("Hata", "RSA Public Key bulunamadı!\n\nRSA şifreleme için public key'i MANUEL olarak girmeniz veya 'Sunucudan Al' butonunu kullanmanız gerekmektedir.")
                         return
                     
-                    session_key_bytes = os.urandom(key_len)
-                    self.current_session_key = session_key_bytes
+                    # Key'i bytes'a çevir (RSA için)
+                    key_for_rsa = session_key_bytes if isinstance(session_key_bytes, bytes) else session_key.encode('utf-8')
                     
                     rsa_start = perf_counter()
-                    enc_session_key = RSACipher.encrypt(session_key_bytes, rsa_pub_key)
+                    enc_session_key = RSACipher.encrypt(key_for_rsa, rsa_pub_key)
                     rsa_time = perf_counter() - rsa_start
                     final_payload['encrypted_key'] = enc_session_key
                     final_payload['key_dist'] = 'RSA'
@@ -941,22 +1201,28 @@ class ClientGUI:
                     
                     ecc_time = perf_counter() - ecc_start
                     
-                    session_key_bytes = shared_secret[:key_len]
-                    self.current_session_key = session_key_bytes
+                    # ECC ile AES/DES key'ini şifrele (RSA gibi)
+                    # session_key_bytes zaten UI'dan alındı veya otomatik üretildi
+                    # ECC shared secret ile XOR yaparak şifrele
+                    key_len = len(session_key_bytes)
+                    # shared_secret'ın ilk key_len byte'ını kullan
+                    ecc_key = shared_secret[:key_len]
+                    # XOR ile şifrele
+                    encrypted_key = bytes(a ^ b for a, b in zip(session_key_bytes, ecc_key))
                     
+                    final_payload['encrypted_key'] = encrypted_key.hex()  # Hex string olarak gönder
                     final_payload['ecc_public_key'] = client_ecc_pub
                     final_payload['key_dist'] = 'ECC'
                     final_payload['use_ecc'] = True
                 else:
-                    session_key_bytes = os.urandom(key_len)
-                    self.current_session_key = session_key_bytes
-                    import base64
-                    final_payload['session_key'] = base64.b64encode(session_key_bytes).decode('utf-8')
+                    # Key'i string olarak gönder
+                    final_payload['session_key'] = session_key if isinstance(session_key, str) else session_key_bytes.decode('utf-8', errors='ignore')
                     final_payload['key_dist'] = 'NONE'
                     final_payload['use_rsa'] = False
                     final_payload['use_ecc'] = False
                 
-                params = {"key": session_key_bytes}
+                # Key'i geçir - ECC kullanılıyorsa da normal key kullanılır (ECC sadece key exchange için)
+                params = {"key": session_key if isinstance(session_key, str) else session_key_bytes.decode('utf-8', errors='ignore')}
                 encrypt_start = perf_counter()
                 enc_msg = self.encryption_manager.encrypt(msg, method, use_lib=use_lib, **params)
                 encrypt_time = perf_counter() - encrypt_start
@@ -978,11 +1244,19 @@ class ClientGUI:
                     'impl_mode': mode_str,
                     'params': payload_params
                 })
-                
-                if hasattr(self, 'key_entry_var'):
-                    self.key_entry_var.set(session_key_bytes.hex())
             else:
                 params = self.get_ui_params()
+                
+                # Substitution için key yoksa random key üret
+                if method == "substitution" and 'key' not in params:
+                    import random
+                    import string
+                    chars = list(string.ascii_uppercase)
+                    random.shuffle(chars)
+                    params['key'] = ''.join(chars)
+                    # UI'da da göster
+                    if hasattr(self, 'substitution_key_var'):
+                        self.substitution_key_var.set(params['key'])
                 
                 encrypt_start = perf_counter()
                 if method != "none":
@@ -1008,8 +1282,11 @@ class ClientGUI:
                 disp_method = f"{method.upper()} ({mode_str})"
                 if use_rsa:
                     disp_method += " + RSA"
-                if 'session_key_bytes' in locals():
-                    session_key_display = session_key_bytes.hex()
+                elif use_ecc:
+                    disp_method += " + ECC"
+                # Key'i string olarak göster (ECC sadece key exchange için, key normal AES/DES key'i)
+                if 'session_key' in locals():
+                    session_key_display = session_key if isinstance(session_key, str) else (session_key_bytes.decode('utf-8', errors='ignore') if 'session_key_bytes' in locals() else "-")
                 else:
                     session_key_display = "-"
             else:

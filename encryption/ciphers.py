@@ -60,9 +60,27 @@ class EncryptionManager:
         # Diğer metodlar sadece manuel
         elif method == "caesar": return CaesarCipher.encrypt(text, kwargs.get('shift', 3))
         elif method == "vigenere": return VigenereCipher.encrypt(text, kwargs.get('key', 'KEY'))
-        elif method == "substitution": return self.substitution_cipher.encrypt(text)
+        elif method == "substitution":
+            # Substitution cipher'ı initialize et (key varsa kullan, yoksa random)
+            key = kwargs.get('key')
+            if not key:
+                # Key yoksa random key üret
+                import random
+                import string
+                chars = list(string.ascii_uppercase)
+                random.shuffle(chars)
+                key = ''.join(chars)
+            # Her seferinde yeni cipher oluştur (key değişebilir)
+            self.substitution_cipher = SubstitutionCipher(key)
+            return self.substitution_cipher.encrypt(text)
         elif method == "rail_fence": return RailFenceCipher.encrypt(text, kwargs.get('rails', 3))
-        elif method == "affine": return self.affine_cipher.encrypt(text)
+        elif method == "affine":
+            # Affine cipher'ı initialize et (a ve b varsa kullan, yoksa varsayılan)
+            a = kwargs.get('a', 5)
+            b = kwargs.get('b', 8)
+            # Her seferinde yeni cipher oluştur (a ve b değişebilir)
+            self.affine_cipher = AffineCipher(a, b)
+            return self.affine_cipher.encrypt(text)
         elif method == "route": return RouteCipher.encrypt(text, kwargs.get('rows', 3), kwargs.get('cols', 3), kwargs.get('route', 'spiral'))
         elif method == "columnar_transposition": return ColumnarTranspositionCipher.encrypt(text, kwargs.get('key', 'KEY'))
         elif method == "polybius":
@@ -71,7 +89,12 @@ class EncryptionManager:
         elif method == "pigpen":
             if not self.pigpen_cipher: self.pigpen_cipher = PigpenCipher()
             return self.pigpen_cipher.encrypt(text)
-        elif method == "hill": return self.hill_cipher.encrypt(text)
+        elif method == "hill":
+            # Hill cipher'ı initialize et (key_matrix varsa kullan, yoksa varsayılan)
+            key_matrix = kwargs.get('key_matrix')
+            # Her seferinde yeni cipher oluştur (key_matrix değişebilir)
+            self.hill_cipher = HillCipher(key_matrix)
+            return self.hill_cipher.encrypt(text)
         else: raise ValueError(f"Unknown encryption method: {method}")
 
     def decrypt(self, text: str, method: str, use_lib: bool = False, **kwargs) -> str:
@@ -90,9 +113,23 @@ class EncryptionManager:
         # Diğerleri (Manuel)
         elif method == "caesar": return CaesarCipher.decrypt(text, kwargs.get('shift', 3))
         elif method == "vigenere": return VigenereCipher.decrypt(text, kwargs.get('key', 'KEY'))
-        elif method == "substitution": return self.substitution_cipher.decrypt(text)
+        elif method == "substitution":
+            # Substitution cipher'ı initialize et (key varsa kullan, yoksa random)
+            key = kwargs.get('key')
+            if not key:
+                # Key yoksa hata ver (decrypt için key gerekli)
+                raise ValueError("Substitution cipher için key gerekli!")
+            # Her seferinde yeni cipher oluştur (key değişebilir)
+            self.substitution_cipher = SubstitutionCipher(key)
+            return self.substitution_cipher.decrypt(text)
         elif method == "rail_fence": return RailFenceCipher.decrypt(text, kwargs.get('rails', 3))
-        elif method == "affine": return self.affine_cipher.decrypt(text)
+        elif method == "affine":
+            # Affine cipher'ı initialize et (a ve b varsa kullan, yoksa varsayılan)
+            a = kwargs.get('a', 5)
+            b = kwargs.get('b', 8)
+            # Her seferinde yeni cipher oluştur (a ve b değişebilir)
+            self.affine_cipher = AffineCipher(a, b)
+            return self.affine_cipher.decrypt(text)
         elif method == "route": return RouteCipher.decrypt(text, kwargs.get('rows', 3), kwargs.get('cols', 3), kwargs.get('route', 'spiral'))
         elif method == "columnar_transposition": return ColumnarTranspositionCipher.decrypt(text, kwargs.get('key', 'KEY'))
         elif method == "polybius":
@@ -101,5 +138,10 @@ class EncryptionManager:
         elif method == "pigpen":
             if not self.pigpen_cipher: self.pigpen_cipher = PigpenCipher()
             return self.pigpen_cipher.decrypt(text)
-        elif method == "hill": return self.hill_cipher.decrypt(text)
+        elif method == "hill":
+            # Hill cipher'ı initialize et (key_matrix varsa kullan, yoksa varsayılan)
+            key_matrix = kwargs.get('key_matrix')
+            # Her seferinde yeni cipher oluştur (key_matrix değişebilir)
+            self.hill_cipher = HillCipher(key_matrix)
+            return self.hill_cipher.decrypt(text)
         else: raise ValueError(f"Unknown encryption method: {method}")

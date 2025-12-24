@@ -88,21 +88,22 @@ class AESCipher(_SymmetricCipherBase):
 
     @staticmethod
     def _derive_key(key) -> bytes:
-        """Key'i bytes'a çevirir. String veya bytes kabul eder."""
+        """Key'i bytes'a çevirir. String (16 karakter) veya bytes kabul eder. Byte kontrolü yapar."""
         if isinstance(key, bytes):
-            # Zaten bytes, direkt kullan (16 byte olmalı)
-            if len(key) >= 16:
-                return key[:16]
-            # 16 byte'tan kısa ise hashle
-            return hashlib.sha256(key).digest()[:16]
+            # Zaten bytes, byte kontrolü yap
+            if len(key) != 16:
+                raise ValueError(f"AES anahtarı tam olarak 16 byte olmalıdır, {len(key)} byte sağlandı")
+            return key
         elif isinstance(key, str):
-            # String ise hashle
+            # String ise 16 karakter olmalı
             if not key:
                 raise ValueError("AES anahtarı boş olamaz")
-            digest = hashlib.sha256(key.encode('utf-8')).digest()
-            return digest[:16]  # AES-128
+            if len(key) != 16:
+                raise ValueError(f"AES anahtarı tam olarak 16 karakter olmalıdır, {len(key)} karakter sağlandı")
+            # String'i bytes'a çevir
+            return key.encode('utf-8')
         else:
-            raise ValueError("AES anahtarı string veya bytes olmalıdır")
+            raise ValueError("AES anahtarı string (16 karakter) veya bytes olmalıdır")
 
     @staticmethod
     def _xtime(a: int) -> int:
@@ -264,7 +265,7 @@ class AESCipher(_SymmetricCipherBase):
         return bytes(state)
 
     @classmethod
-    def encrypt(cls, text: str, key: str, iv: str | None = None) -> str:
+    def encrypt(cls, text: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = cls._derive_key(key)
         round_keys = cls._key_expansion(key_bytes)
         iv_bytes = cls._derive_iv(iv)
@@ -283,7 +284,7 @@ class AESCipher(_SymmetricCipherBase):
         return cls._encode_payload(iv_bytes, ciphertext)
 
     @classmethod
-    def decrypt(cls, payload: str, key: str, iv: str | None = None) -> str:
+    def decrypt(cls, payload: str, key: str | bytes, iv: str | None = None) -> str:
         key_bytes = cls._derive_key(key)
         round_keys = cls._key_expansion(key_bytes)
         iv_bytes, ciphertext = cls._decode_payload(payload)
